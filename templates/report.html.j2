@@ -21,6 +21,7 @@
     --low:      #22c55e;
     --clean:    #10b981;
     --brand:    #818cf8;
+    --nav-height: 49px;
   }
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -34,7 +35,7 @@
 
   /* ── Layout ──────────────────────────────────────────────────────────── */
   .container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
-  .section { margin-bottom: 40px; }
+  .section { margin-bottom: 40px; scroll-margin-top: calc(var(--nav-height) + 8px); }
 
   /* ── Header ──────────────────────────────────────────────────────────── */
   .header {
@@ -113,8 +114,9 @@
   thead th {
     background: var(--surface2); color: var(--muted);
     font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
-    padding: 10px 14px; text-align: left; position: sticky; top: 0;
-    cursor: pointer; user-select: none; white-space: nowrap;
+    padding: 10px 14px; text-align: left; white-space: nowrap;
+    position: sticky; top: var(--nav-height); z-index: 2;
+    cursor: pointer; user-select: none;
   }
   thead th:hover { color: var(--text); }
   thead th::after { content: ' ⇅'; opacity: 0.4; }
@@ -132,8 +134,13 @@
   .expand-row.open { display: table-row; }
   .expand-content { padding: 16px 14px; }
   .expand-trigger { cursor: pointer; }
-  .expand-trigger::before { content: '▶ '; font-size: 10px; color: var(--muted); }
-  .expand-trigger.open::before { content: '▼ '; }
+  .expand-trigger > td:first-child { position: relative; padding-left: 26px; }
+  .expand-trigger > td:first-child::before {
+    content: '▶';
+    position: absolute; left: 8px; top: 50%; transform: translateY(-50%);
+    font-size: 10px; color: var(--muted);
+  }
+  .expand-trigger.open > td:first-child::before { content: '▼'; }
 
   /* ── Signal chips ────────────────────────────────────────────────────── */
   .signals { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
@@ -145,6 +152,16 @@
   .signal-high     { background: rgba(249,115,22,0.1); color: #fdba74; border: 1px solid rgba(249,115,22,0.2); }
   .signal-medium   { background: rgba(234,179,8,0.1);  color: #fde047; border: 1px solid rgba(234,179,8,0.2); }
   .signal-low      { background: rgba(34,197,94,0.1);  color: #86efac; border: 1px solid rgba(34,197,94,0.2); }
+
+  /* ── Entra admin portal deep-link ───────────────────────────────────── */
+  .entra-link {
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 0.75rem;
+    margin-left: 4px;
+    opacity: 0.6;
+  }
+  .entra-link:hover { opacity: 1; }
 
   /* ── Recommendation box ──────────────────────────────────────────────── */
   .rec-box {
@@ -254,8 +271,44 @@
   }
   .callout-artifact-list li::before { content: '• '; color: #fbbf24; }
 
+  /* ── Sticky nav ──────────────────────────────────────────────────────── */
+  .sticky-nav {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(15,17,23,0.95);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    padding: 8px 0;
+  }
+  .sticky-nav ul {
+    display: flex;
+    gap: 4px;
+    list-style: none;
+    overflow-x: auto;
+    padding: 0 24px;
+    max-width: 1200px;
+    margin: 0 auto;
+    white-space: nowrap;
+    scrollbar-width: none;
+  }
+  .sticky-nav ul::-webkit-scrollbar { display: none; }
+  .sticky-nav a {
+    display: block;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    text-decoration: none;
+    transition: background 0.15s, color 0.15s;
+  }
+  .sticky-nav a:hover { color: var(--text); background: var(--surface2); text-decoration: none; }
+  .sticky-nav a.active { color: var(--accent); background: rgba(56,189,248,0.1); }
+
   /* ── Print styles ────────────────────────────────────────────────────── */
   @media print {
+    .sticky-nav { display: none; }
     body { background: white; color: black; }
     .header { background: white; border-bottom: 2px solid #e2e8f0; }
     .brand-logo { -webkit-text-fill-color: #4f46e5; }
@@ -287,6 +340,20 @@
   </div>
 </div>
 
+<!-- ── Sticky nav ────────────────────────────────────────────────────────── -->
+<nav class="sticky-nav" id="sticky-nav">
+  <ul>
+    <li><a href="#sec-summary">Summary</a></li>
+    <li><a href="#sec-inventory">Inventory</a></li>
+    {% if critical_high_apps %}<li><a href="#sec-critical">Critical &amp; High</a></li>{% endif %}
+    {% if stale_apps %}<li><a href="#sec-stale">Stale</a></li>{% endif %}
+    {% if credential_apps %}<li><a href="#sec-creds">Credentials</a></li>{% endif %}
+    {% if orphaned_apps %}<li><a href="#sec-orphaned">Orphaned</a></li>{% endif %}
+    {% if high_privilege_apps %}<li><a href="#sec-priv">Over-Privileged</a></li>{% endif %}
+    <li><a href="#sec-methodology">Methodology</a></li>
+  </ul>
+</nav>
+
 <div class="container">
 
   <!-- ── Skipped data notice ────────────────────────────────────────────── -->
@@ -301,7 +368,7 @@
   {% endif %}
 
   <!-- ── Executive Summary ──────────────────────────────────────────────── -->
-  <div class="section">
+  <div class="section" id="sec-summary">
     <div class="section-title">
       Executive Summary
       <div class="section-subtitle">{{ total_apps }} enterprise apps scanned</div>
@@ -389,7 +456,7 @@
   </div>
 
   <!-- ── Full Inventory ─────────────────────────────────────────────────── -->
-  <div class="section">
+  <div class="section" id="sec-inventory">
     <div class="section-title">
       Full App Inventory
       <div class="section-subtitle">All {{ total_apps }} enterprise apps — sortable and filterable</div>
@@ -424,7 +491,7 @@
           {% for app in all_apps %}
           <tr data-band="{{ app.risk_band }}" data-name="{{ app.display_name | lower }}" data-appid="{{ app.app_id | lower }}" data-microsoft="{{ 'true' if app.is_microsoft_first_party else 'false' }}" data-artifact="{{ 'true' if app.is_tool_artifact else 'false' }}">
             <td>
-              <div class="app-name">{{ app.display_name }}</div>
+              <div class="app-name">{{ app.display_name }}<a href="https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationMenuBlade/~/Overview/appId/{{ app.app_id }}" target="_blank" rel="noopener" title="Open in Entra admin center" class="entra-link">↗</a></div>
               <div class="app-id">{{ app.app_id }}</div>
               {% set _desc = (app.description or app.notes or '') | trim %}
               {% if _desc %}
@@ -449,7 +516,7 @@
             <td>
               <div class="signals" style="gap: 4px;">
                 {% for sig in app.signals[:3] %}
-                <span class="signal-chip signal-{{ sig.severity }}" title="{{ sig.detail }}">{{ sig.key.replace('_', ' ') }}</span>
+                <span class="signal-chip signal-{{ sig.severity }}" title="{{ sig.detail }}">{{ sig.title }}</span>
                 {% endfor %}
                 {% if app.signals | length > 3 %}
                 <span style="color: var(--muted); font-size: 11px;">+{{ app.signals | length - 3 }} more</span>
@@ -466,7 +533,7 @@
 
   <!-- ── Critical & High Risk Apps ─────────────────────────────────────── -->
   {% if critical_high_apps %}
-  <div class="section">
+  <div class="section" id="sec-critical">
     <div class="section-title">
       Critical &amp; High Risk Apps
       <div class="section-subtitle">{{ critical_high_apps | length }} apps requiring immediate attention</div>
@@ -475,27 +542,27 @@
       <table id="tbl-critical">
         <thead>
           <tr>
-            <th>App Name</th>
-            <th>Risk Score</th>
-            <th>Risk Band</th>
-            <th>Last Sign-In</th>
-            <th>Owners</th>
-            <th>Assigned</th>
-            <th>Primary Action</th>
+            <th onclick="sortTable('tbl-critical', 0)">App Name</th>
+            <th onclick="sortTable('tbl-critical', 1)">Risk Score</th>
+            <th onclick="sortTable('tbl-critical', 2)">Risk Band</th>
+            <th onclick="sortTable('tbl-critical', 3)">Last Sign-In</th>
+            <th onclick="sortTable('tbl-critical', 4)">Owners</th>
+            <th onclick="sortTable('tbl-critical', 5)">Assigned</th>
+            <th onclick="sortTable('tbl-critical', 6)">Primary Action</th>
           </tr>
         </thead>
         <tbody>
           {% for app in critical_high_apps %}
           <tr class="expand-trigger" onclick="toggleRow('crit-{{ loop.index }}', this)">
             <td>
-              <div class="app-name">{{ app.display_name }}</div>
+              <div class="app-name">{{ app.display_name }}<a href="https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationMenuBlade/~/Overview/appId/{{ app.app_id }}" target="_blank" rel="noopener" title="Open in Entra admin center" class="entra-link">↗</a></div>
               <div class="app-id">{{ app.app_id }}</div>
               {% set _desc = (app.description or app.notes or '') | trim %}
               {% if _desc %}
               <div class="app-desc" title="{{ _desc }}">{{ _desc[:100] }}{{ '…' if _desc | length > 100 else '' }}</div>
               {% endif %}
             </td>
-            <td>
+            <td data-val="{{ app.risk_score }}">
               <div class="score-bar-wrap">
                 <div class="score-bar">
                   <div class="score-bar-fill" style="width: {{ app.risk_score }}%; background: var(--{{ app.risk_band }})"></div>
@@ -503,10 +570,10 @@
                 <span class="score-num" style="color: var(--{{ app.risk_band }})">{{ app.risk_score }}</span>
               </div>
             </td>
-            <td><span class="badge badge-{{ app.risk_band }}">{{ app.risk_band }}</span></td>
-            <td>{{ app.last_sign_in | format_date if app.last_sign_in else '—' }}</td>
-            <td>{{ app.owner_count }}</td>
-            <td>{{ app.assignment_count }}</td>
+            <td data-val="{{ app.risk_band }}"><span class="badge badge-{{ app.risk_band }}">{{ app.risk_band }}</span></td>
+            <td data-val="{{ app.days_since_sign_in if app.days_since_sign_in is not none else 99999 }}">{{ app.last_sign_in | format_date if app.last_sign_in else '—' }}</td>
+            <td data-val="{{ app.owner_count }}">{{ app.owner_count }}</td>
+            <td data-val="{{ app.assignment_count }}">{{ app.assignment_count }}</td>
             <td style="font-size: 12px; color: var(--muted); max-width: 220px;">{{ app.primary_recommendation[:80] }}{% if app.primary_recommendation | length > 80 %}...{% endif %}</td>
           </tr>
           <tr class="expand-row" id="crit-{{ loop.index }}">
@@ -530,7 +597,7 @@
 
   <!-- ── Stale Apps ─────────────────────────────────────────────────────── -->
   {% if stale_apps %}
-  <div class="section">
+  <div class="section" id="sec-stale">
     <div class="section-title">
       Stale Apps
       <div class="section-subtitle">{{ stale_apps | length }} apps with no recent sign-in activity</div>
@@ -539,30 +606,42 @@
       <table id="tbl-stale">
         <thead>
           <tr>
-            <th>App Name</th>
-            <th>Last Sign-In</th>
-            <th>Days Since Sign-In</th>
-            <th>Owners</th>
-            <th>Assignments</th>
-            <th>Risk</th>
+            <th onclick="sortTable('tbl-stale', 0)">App Name</th>
+            <th onclick="sortTable('tbl-stale', 1)">Last Sign-In</th>
+            <th onclick="sortTable('tbl-stale', 2)">Days Since Sign-In</th>
+            <th onclick="sortTable('tbl-stale', 3)">Owners</th>
+            <th onclick="sortTable('tbl-stale', 4)">Assignments</th>
+            <th onclick="sortTable('tbl-stale', 5)">Risk</th>
           </tr>
         </thead>
         <tbody>
           {% for app in stale_apps %}
-          <tr>
+          <tr class="expand-trigger" onclick="toggleRow('stale-{{ loop.index }}', this)">
             <td>
-              <div class="app-name">{{ app.display_name }}</div>
+              <div class="app-name">{{ app.display_name }}<a href="https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationMenuBlade/~/Overview/appId/{{ app.app_id }}" target="_blank" rel="noopener" title="Open in Entra admin center" class="entra-link">↗</a></div>
               <div class="app-id">{{ app.app_id }}</div>
               {% set _desc = (app.description or app.notes or '') | trim %}
               {% if _desc %}
               <div class="app-desc" title="{{ _desc }}">{{ _desc[:100] }}{{ '…' if _desc | length > 100 else '' }}</div>
               {% endif %}
             </td>
-            <td>{{ app.last_sign_in | format_date if app.last_sign_in else 'Never' }}</td>
-            <td>{% if app.days_since_sign_in is not none %}{{ app.days_since_sign_in }}d{% else %}—{% endif %}</td>
-            <td>{{ app.owner_count }}</td>
-            <td>{{ app.assignment_count }}</td>
-            <td><span class="badge badge-{{ app.risk_band }}">{{ app.risk_band }}</span></td>
+            <td data-val="{{ app.days_since_sign_in if app.days_since_sign_in is not none else 99999 }}">{{ app.last_sign_in | format_date if app.last_sign_in else 'Never' }}</td>
+            <td data-val="{{ app.days_since_sign_in if app.days_since_sign_in is not none else 99999 }}">{% if app.days_since_sign_in is not none %}{{ app.days_since_sign_in }}d{% else %}—{% endif %}</td>
+            <td data-val="{{ app.owner_count }}">{{ app.owner_count }}</td>
+            <td data-val="{{ app.assignment_count }}">{{ app.assignment_count }}</td>
+            <td data-val="{{ app.risk_score }}"><span class="badge badge-{{ app.risk_band }}">{{ app.risk_band }}</span></td>
+          </tr>
+          <tr class="expand-row" id="stale-{{ loop.index }}">
+            <td colspan="6">
+              <div class="expand-content">
+                <div class="signals">
+                  {% for sig in app.signals %}
+                  <span class="signal-chip signal-{{ sig.severity }}" title="{{ sig.detail }}">{{ sig.title }}</span>
+                  {% endfor %}
+                </div>
+                <div class="rec-box"><strong>Recommendation:</strong> {{ app.primary_recommendation }}</div>
+              </div>
+            </td>
           </tr>
           {% endfor %}
         </tbody>
@@ -573,7 +652,7 @@
 
   <!-- ── Credential Issues ──────────────────────────────────────────────── -->
   {% if credential_apps %}
-  <div class="section">
+  <div class="section" id="sec-creds">
     <div class="section-title">
       Credential Issues
       <div class="section-subtitle">{{ credential_apps | length }} apps with expired or near-expiry secrets/certificates</div>
@@ -582,30 +661,54 @@
       <table id="tbl-creds">
         <thead>
           <tr>
-            <th>App Name</th>
-            <th>Expired Secret</th>
-            <th>Expired Cert</th>
-            <th>Near-Expiry Secret</th>
-            <th>Near-Expiry Cert</th>
-            <th>Risk</th>
+            <th onclick="sortTable('tbl-creds', 0)">App Name</th>
+            <th onclick="sortTable('tbl-creds', 1)">Expired Secret</th>
+            <th onclick="sortTable('tbl-creds', 2)">Expired Cert</th>
+            <th onclick="sortTable('tbl-creds', 3)">Near-Expiry Secret</th>
+            <th onclick="sortTable('tbl-creds', 4)">Near-Expiry Cert</th>
+            <th onclick="sortTable('tbl-creds', 5)">Earliest Secret Expiry</th>
+            <th onclick="sortTable('tbl-creds', 6)">Earliest Cert Expiry</th>
+            <th onclick="sortTable('tbl-creds', 7)">Risk</th>
           </tr>
         </thead>
         <tbody>
           {% for app in credential_apps %}
-          <tr>
+          <tr class="expand-trigger" onclick="toggleRow('cred-{{ loop.index }}', this)">
             <td>
-              <div class="app-name">{{ app.display_name }}</div>
+              <div class="app-name">{{ app.display_name }}<a href="https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationMenuBlade/~/Overview/appId/{{ app.app_id }}" target="_blank" rel="noopener" title="Open in Entra admin center" class="entra-link">↗</a></div>
               <div class="app-id">{{ app.app_id }}</div>
               {% set _desc = (app.description or app.notes or '') | trim %}
               {% if _desc %}
               <div class="app-desc" title="{{ _desc }}">{{ _desc[:100] }}{{ '…' if _desc | length > 100 else '' }}</div>
               {% endif %}
             </td>
-            <td>{% if app.has_expired_secret %}<span class="badge badge-critical">Yes</span>{% else %}—{% endif %}</td>
-            <td>{% if app.has_expired_cert %}<span class="badge badge-critical">Yes</span>{% else %}—{% endif %}</td>
-            <td>{% if app.has_near_expiry_secret %}<span class="badge badge-high">Yes</span>{% else %}—{% endif %}</td>
-            <td>{% if app.has_near_expiry_cert %}<span class="badge badge-high">Yes</span>{% else %}—{% endif %}</td>
-            <td><span class="badge badge-{{ app.risk_band }}">{{ app.risk_band }}</span></td>
+            <td data-val="{{ 1 if app.has_expired_secret else 0 }}">{% if app.has_expired_secret %}<span class="badge badge-critical">Yes</span>{% else %}—{% endif %}</td>
+            <td data-val="{{ 1 if app.has_expired_cert else 0 }}">{% if app.has_expired_cert %}<span class="badge badge-critical">Yes</span>{% else %}—{% endif %}</td>
+            <td data-val="{{ 1 if app.has_near_expiry_secret else 0 }}">{% if app.has_near_expiry_secret %}<span class="badge badge-high">Yes</span>{% else %}—{% endif %}</td>
+            <td data-val="{{ 1 if app.has_near_expiry_cert else 0 }}">{% if app.has_near_expiry_cert %}<span class="badge badge-high">Yes</span>{% else %}—{% endif %}</td>
+            <td data-val="{% set secret_dates = app.password_credentials | map(attribute='endDateTime') | select | list %}{% set earliest_secret = secret_dates | sort | first if secret_dates else none %}{{ earliest_secret if earliest_secret else '9999' }}">
+              {% set secret_dates = app.password_credentials | map(attribute='endDateTime') | select | list %}
+              {% set earliest_secret = secret_dates | sort | first if secret_dates else none %}
+              {{ earliest_secret | format_date if earliest_secret else '—' }}
+            </td>
+            <td data-val="{% set cert_dates = app.key_credentials | map(attribute='endDateTime') | select | list %}{% set earliest_cert = cert_dates | sort | first if cert_dates else none %}{{ earliest_cert if earliest_cert else '9999' }}">
+              {% set cert_dates = app.key_credentials | map(attribute='endDateTime') | select | list %}
+              {% set earliest_cert = cert_dates | sort | first if cert_dates else none %}
+              {{ earliest_cert | format_date if earliest_cert else '—' }}
+            </td>
+            <td data-val="{{ app.risk_score }}"><span class="badge badge-{{ app.risk_band }}">{{ app.risk_band }}</span></td>
+          </tr>
+          <tr class="expand-row" id="cred-{{ loop.index }}">
+            <td colspan="8">
+              <div class="expand-content">
+                <div class="signals">
+                  {% for sig in app.signals %}
+                  <span class="signal-chip signal-{{ sig.severity }}" title="{{ sig.detail }}">{{ sig.title }}</span>
+                  {% endfor %}
+                </div>
+                <div class="rec-box"><strong>Recommendation:</strong> {{ app.primary_recommendation }}</div>
+              </div>
+            </td>
           </tr>
           {% endfor %}
         </tbody>
@@ -616,7 +719,7 @@
 
   <!-- ── Orphaned Apps ──────────────────────────────────────────────────── -->
   {% if orphaned_apps %}
-  <div class="section">
+  <div class="section" id="sec-orphaned">
     <div class="section-title">
       Orphaned Apps
       <div class="section-subtitle">{{ orphaned_apps | length }} apps with no valid owner</div>
@@ -625,28 +728,40 @@
       <table id="tbl-orphaned">
         <thead>
           <tr>
-            <th>App Name</th>
-            <th>Owners (total)</th>
-            <th>Disabled Owners</th>
-            <th>Last Sign-In</th>
-            <th>Risk</th>
+            <th onclick="sortTable('tbl-orphaned', 0)">App Name</th>
+            <th onclick="sortTable('tbl-orphaned', 1)">Owners (total)</th>
+            <th onclick="sortTable('tbl-orphaned', 2)">Disabled Owners</th>
+            <th onclick="sortTable('tbl-orphaned', 3)">Last Sign-In</th>
+            <th onclick="sortTable('tbl-orphaned', 4)">Risk</th>
           </tr>
         </thead>
         <tbody>
           {% for app in orphaned_apps %}
-          <tr>
+          <tr class="expand-trigger" onclick="toggleRow('orphan-{{ loop.index }}', this)">
             <td>
-              <div class="app-name">{{ app.display_name }}</div>
+              <div class="app-name">{{ app.display_name }}<a href="https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationMenuBlade/~/Overview/appId/{{ app.app_id }}" target="_blank" rel="noopener" title="Open in Entra admin center" class="entra-link">↗</a></div>
               <div class="app-id">{{ app.app_id }}</div>
               {% set _desc = (app.description or app.notes or '') | trim %}
               {% if _desc %}
               <div class="app-desc" title="{{ _desc }}">{{ _desc[:100] }}{{ '…' if _desc | length > 100 else '' }}</div>
               {% endif %}
             </td>
-            <td>{{ app.owner_count }}</td>
-            <td>{{ app.owners | selectattr('id', 'in', app.owners | map(attribute='id') | list) | list | length }}</td>
-            <td>{{ app.last_sign_in | format_date if app.last_sign_in else '—' }}</td>
-            <td><span class="badge badge-{{ app.risk_band }}">{{ app.risk_band }}</span></td>
+            <td data-val="{{ app.owner_count }}">{{ app.owner_count }}</td>
+            <td data-val="{{ app.disabled_owner_count }}">{{ app.disabled_owner_count }}</td>
+            <td data-val="{{ app.days_since_sign_in if app.days_since_sign_in is not none else 99999 }}">{{ app.last_sign_in | format_date if app.last_sign_in else '—' }}</td>
+            <td data-val="{{ app.risk_score }}"><span class="badge badge-{{ app.risk_band }}">{{ app.risk_band }}</span></td>
+          </tr>
+          <tr class="expand-row" id="orphan-{{ loop.index }}">
+            <td colspan="5">
+              <div class="expand-content">
+                <div class="signals">
+                  {% for sig in app.signals %}
+                  <span class="signal-chip signal-{{ sig.severity }}" title="{{ sig.detail }}">{{ sig.title }}</span>
+                  {% endfor %}
+                </div>
+                <div class="rec-box"><strong>Recommendation:</strong> {{ app.primary_recommendation }}</div>
+              </div>
+            </td>
           </tr>
           {% endfor %}
         </tbody>
@@ -657,7 +772,7 @@
 
   <!-- ── Over-Privileged Apps ───────────────────────────────────────────── -->
   {% if high_privilege_apps %}
-  <div class="section">
+  <div class="section" id="sec-priv">
     <div class="section-title">
       Over-Privileged Apps
       <div class="section-subtitle">{{ high_privilege_apps | length }} apps with high-privilege permissions and limited or no activity</div>
@@ -666,26 +781,38 @@
       <table id="tbl-priv">
         <thead>
           <tr>
-            <th>App Name</th>
-            <th>Last Sign-In</th>
-            <th>High-Privilege Permissions</th>
-            <th>Risk</th>
+            <th onclick="sortTable('tbl-priv', 0)">App Name</th>
+            <th onclick="sortTable('tbl-priv', 1)">Last Sign-In</th>
+            <th onclick="sortTable('tbl-priv', 2)">High-Privilege Permissions</th>
+            <th onclick="sortTable('tbl-priv', 3)">Risk</th>
           </tr>
         </thead>
         <tbody>
           {% for app in high_privilege_apps %}
-          <tr>
+          <tr class="expand-trigger" onclick="toggleRow('priv-{{ loop.index }}', this)">
             <td>
-              <div class="app-name">{{ app.display_name }}</div>
+              <div class="app-name">{{ app.display_name }}<a href="https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationMenuBlade/~/Overview/appId/{{ app.app_id }}" target="_blank" rel="noopener" title="Open in Entra admin center" class="entra-link">↗</a></div>
               <div class="app-id">{{ app.app_id }}</div>
               {% set _desc = (app.description or app.notes or '') | trim %}
               {% if _desc %}
               <div class="app-desc" title="{{ _desc }}">{{ _desc[:100] }}{{ '…' if _desc | length > 100 else '' }}</div>
               {% endif %}
             </td>
-            <td>{{ app.last_sign_in | format_date if app.last_sign_in else '—' }}</td>
+            <td data-val="{{ app.days_since_sign_in if app.days_since_sign_in is not none else 99999 }}">{{ app.last_sign_in | format_date if app.last_sign_in else '—' }}</td>
             <td><span class="badge badge-critical">Yes</span></td>
-            <td><span class="badge badge-{{ app.risk_band }}">{{ app.risk_band }}</span></td>
+            <td data-val="{{ app.risk_score }}"><span class="badge badge-{{ app.risk_band }}">{{ app.risk_band }}</span></td>
+          </tr>
+          <tr class="expand-row" id="priv-{{ loop.index }}">
+            <td colspan="4">
+              <div class="expand-content">
+                <div class="signals">
+                  {% for sig in app.signals %}
+                  <span class="signal-chip signal-{{ sig.severity }}" title="{{ sig.detail }}">{{ sig.title }}</span>
+                  {% endfor %}
+                </div>
+                <div class="rec-box"><strong>Recommendation:</strong> {{ app.primary_recommendation }}</div>
+              </div>
+            </td>
           </tr>
           {% endfor %}
         </tbody>
@@ -695,7 +822,7 @@
   {% endif %}
 
   <!-- ── Methodology ────────────────────────────────────────────────────── -->
-  <div class="section">
+  <div class="section" id="sec-methodology">
     <div class="section-title">Methodology &amp; Transparency</div>
     <div class="methodology-grid">
       <div class="method-card">
@@ -774,10 +901,16 @@ function sortTable(tableId, colIndex) {
   ths.forEach((th, i) => { th.classList.remove('asc', 'desc'); });
   ths[colIndex].classList.add(asc ? 'asc' : 'desc');
 
-  const rows = Array.from(tbody.querySelectorAll('tr:not(.expand-row)'));
-  rows.sort((a, b) => {
-    const aCell = a.cells[colIndex];
-    const bCell = b.cells[colIndex];
+  // Capture each data row paired with its expand row BEFORE any DOM moves
+  const pairs = Array.from(tbody.querySelectorAll('tr:not(.expand-row)')).map(row => ({
+    data: row,
+    expand: row.nextElementSibling?.classList.contains('expand-row')
+      ? row.nextElementSibling : null,
+  }));
+
+  pairs.sort((a, b) => {
+    const aCell = a.data.cells[colIndex];
+    const bCell = b.data.cells[colIndex];
     const aVal = aCell?.dataset?.val ?? aCell?.textContent?.trim() ?? '';
     const bVal = bCell?.dataset?.val ?? bCell?.textContent?.trim() ?? '';
     const aNum = parseFloat(aVal);
@@ -786,7 +919,11 @@ function sortTable(tableId, colIndex) {
     return asc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
   });
 
-  rows.forEach(row => tbody.appendChild(row));
+  // Re-insert data rows and their expand rows together, keeping them paired
+  pairs.forEach(({ data, expand }) => {
+    tbody.appendChild(data);
+    if (expand) tbody.appendChild(expand);
+  });
 }
 
 // ── Inventory filter state ────────────────────────────────────────────────────
@@ -873,6 +1010,24 @@ function filterTable() {
 
 // Init counter
 filterTable();
+
+// ── Scroll spy for sticky nav ─────────────────────────────────────────────────
+(function() {
+  var sections = document.querySelectorAll('.section[id]');
+  var navLinks = document.querySelectorAll('.sticky-nav a');
+  var OFFSET = 80;
+  function onScroll() {
+    var current = '';
+    sections.forEach(function(sec) {
+      if (sec.getBoundingClientRect().top <= OFFSET) current = sec.id;
+    });
+    navLinks.forEach(function(a) {
+      a.classList.toggle('active', a.getAttribute('href') === '#' + current);
+    });
+  }
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+})();
 </script>
 </body>
 </html>

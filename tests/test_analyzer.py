@@ -23,6 +23,28 @@ from src.analyzer import (
 
 FIXTURES = Path(__file__).parent / "fixtures" / "sample_sps.json"
 
+# A minimal but complete SP dict that produces zero signals when passed to analyze_app.
+# New test classes build on this by spreading it and overriding specific fields.
+BASE_SP: dict = {
+    "id": "test-sp-id",
+    "appId": "test-app-id",
+    "displayName": "Test App",
+    "accountEnabled": True,
+    "servicePrincipalType": "Application",
+    "tags": [],
+    "createdDateTime": "2024-01-01T00:00:00Z",
+    "passwordCredentials": [],
+    "keyCredentials": [],
+    "replyUrls": [],
+    "_assignments": [{"id": "assign-test", "principalType": "User"}],
+    "_owners": [{"id": "owner-1", "displayName": "Test Owner", "accountEnabled": True}],
+    "_delegatedGrants": [],
+    "_appPermissions": [],
+    # Empty sign-in block with no lastSignInActivity — avoids never_signed_in trigger
+    "_signInActivity": {},
+    "_disabledOwnerIds": [],
+}
+
 
 @pytest.fixture
 def sample_sps():
@@ -113,7 +135,9 @@ class TestParseDt:
 class TestHealthyApp:
     def test_no_signals(self, healthy_app):
         result = analyze_app(healthy_app, stale_days=90)
-        assert result.risk_band == "clean" or result.risk_score < 25
+        assert result.risk_score == 0
+        assert result.risk_band == "clean"
+        assert result.signals == []
         assert result.has_expired_secret is False
         assert result.has_expired_cert is False
 
@@ -288,3 +312,185 @@ class TestScoreCap:
         results = analyze_all(raw)
         for r in results:
             assert r.risk_score >= 0
+
+
+# ── Near expiry credentials ────────────────────────────────────────────────────
+
+
+class TestNearExpiry:
+    def _make_sp_with_secret(self, days_until_expiry: int) -> dict:
+        from datetime import datetime, timezone, timedelta
+        now = datetime.now(timezone.utc)
+        start = now - timedelta(days=30)
+        end = now + timedelta(days=days_until_expiry)
+        return {
+            **BASE_SP,
+            "passwordCredentials": [
+                {
+                    "keyId": "test-key",
+                    "displayName": "test-secret",
+                    "startDateTime": start.isoformat(),
+                    "endDateTime": end.isoformat(),
+                }
+            ],
+        }
+
+    def test_near_expiry_secret_within_30_days(self):
+        sp = self._make_sp_with_secret(15)
+        result = analyze_app(sp)
+        assert result.has_near_expiry_secret
+        assert any(s.key == "near_expiry_secret" for s in result.signals)
+        assert any(s.severity == "high" for s in result.signals if s.key == "near_expiry_secret")
+
+    def test_expiry_warning_secret_30_to_90_days(self):
+        sp = self._make_sp_with_secret(60)
+        result = analyze_app(sp)
+        assert result.has_expiry_warning_secret
+        assert any(s.key == "expiry_warning_secret" for s in result.signals)
+        assert any(s.severity == "medium" for s in result.signals if s.key == "expiry_warning_secret")
+        assert not result.has_near_expiry_secret
+
+    def test_no_expiry_signal_when_far_future(self):
+        sp = self._make_sp_with_secret(120)
+        result = analyze_app(sp)
+        assert not result.has_near_expiry_secret
+        assert not result.has_expiry_warning_secret
+        assert not result.has_expired_secret
+
+
+# ── Long-lived secrets ─────────────────────────────────────────────────────────
+
+
+class TestLongLivedSecret:
+    def test_long_lived_secret_detected(self):
+        from datetime import datetime, timezone, timedelta
+        now = datetime.now(timezone.utc)
+        start = now - timedelta(days=400)
+        end = now + timedelta(days=100)
+        sp = {
+            **BASE_SP,
+            "passwordCredentials": [
+                {
+                    "keyId": "test-key",
+                    "displayName": "old-secret",
+                    "startDateTime": start.isoformat(),
+                    "endDateTime": end.isoformat(),
+                }
+            ],
+        }
+        result = analyze_app(sp)
+        assert any(s.key == "long_lived_secret" for s in result.signals)
+        assert any(s.severity == "low" for s in result.signals if s.key == "long_lived_secret")
+        assert any(s.score_contribution == 15 for s in result.signals if s.key == "long_lived_secret")
+
+    def test_short_lived_secret_not_flagged(self):
+        from datetime import datetime, timezone, timedelta
+        now = datetime.now(timezone.utc)
+        start = now - timedelta(days=30)
+        end = now + timedelta(days=60)
+        sp = {
+            **BASE_SP,
+            "passwordCredentials": [
+                {
+                    "keyId": "test-key",
+                    "displayName": "fresh-secret",
+                    "startDateTime": start.isoformat(),
+                    "endDateTime": end.isoformat(),
+                }
+            ],
+        }
+        result = analyze_app(sp)
+        assert not any(s.key == "long_lived_secret" for s in result.signals)
+
+
+# ── Microsoft first-party apps ─────────────────────────────────────────────────
+
+
+class TestMicrosoftFirstParty:
+    def test_microsoft_app_flagged(self):
+        sp = {**BASE_SP, "appOwnerOrganizationId": "f8cdef31-a31e-4b4a-93e4-5f571e91255a"}
+        result = analyze_app(sp)
+        assert result.is_microsoft_first_party
+
+    def test_non_microsoft_app_not_flagged(self):
+        sp = {**BASE_SP, "appOwnerOrganizationId": "some-other-tenant-id"}
+        result = analyze_app(sp)
+        assert not result.is_microsoft_first_party
+
+
+# ── Tool artifact apps ─────────────────────────────────────────────────────────
+
+
+class TestToolArtifact:
+    def test_tool_artifact_detected(self):
+        sp = {**BASE_SP, "displayName": "Enterprise-Zapp-Scan-2026-01-01"}
+        result = analyze_app(sp)
+        assert result.is_tool_artifact
+        assert any(s.key == "tool_artifact" for s in result.signals)
+        assert any(s.severity == "info" for s in result.signals if s.key == "tool_artifact")
+        # Tool artifact signal has no score contribution
+        assert any(s.score_contribution == 0 for s in result.signals if s.key == "tool_artifact")
+
+    def test_non_artifact_not_flagged(self):
+        sp = {**BASE_SP, "displayName": "My Normal App"}
+        result = analyze_app(sp)
+        assert not result.is_tool_artifact
+
+
+# ── Stale days parameter ───────────────────────────────────────────────────────
+
+
+class TestStaleDaysParameter:
+    def _make_sp_with_last_signin(self, days_ago: int) -> dict:
+        from datetime import datetime, timezone, timedelta
+        last_signin = (datetime.now(timezone.utc) - timedelta(days=days_ago)).isoformat()
+        return {
+            **BASE_SP,
+            "_signInActivity": {
+                "lastSignInActivity": {"lastSignInDateTime": last_signin}
+            },
+        }
+
+    def test_stale_at_default_threshold(self):
+        sp = self._make_sp_with_last_signin(100)
+        result = analyze_app(sp, stale_days=90)
+        assert any(s.key == "stale" for s in result.signals)
+
+    def test_not_stale_within_threshold(self):
+        sp = self._make_sp_with_last_signin(80)
+        result = analyze_app(sp, stale_days=90)
+        assert not any(s.key == "stale" for s in result.signals)
+
+    def test_custom_stale_days_tighter(self):
+        sp = self._make_sp_with_last_signin(40)
+        result_tight = analyze_app(sp, stale_days=30)
+        result_loose = analyze_app(sp, stale_days=90)
+        assert any(s.key == "stale" for s in result_tight.signals)
+        assert not any(s.key == "stale" for s in result_loose.signals)
+
+
+# ── Owner signal mutual exclusivity ───────────────────────────────────────────
+
+
+class TestOwnerSignals:
+    def test_no_owners_and_disabled_owner_mutually_exclusive(self):
+        """no_owners and disabled_owner signals should never both fire for the same app."""
+        # App with no owners at all
+        sp_no_owners = {**BASE_SP, "_owners": [], "_disabledOwnerIds": []}
+        result_no_owners = analyze_app(sp_no_owners)
+        has_no_owners = any(s.key == "no_owners" for s in result_no_owners.signals)
+        has_disabled = any(s.key == "disabled_owner" for s in result_no_owners.signals)
+        assert has_no_owners
+        assert not has_disabled
+
+        # App with one disabled owner
+        sp_disabled_owner = {
+            **BASE_SP,
+            "_owners": [{"id": "dead-user-id", "displayName": "Gone User", "accountEnabled": False}],
+            "_disabledOwnerIds": ["dead-user-id"],
+        }
+        result_disabled = analyze_app(sp_disabled_owner)
+        has_no_owners_2 = any(s.key == "no_owners" for s in result_disabled.signals)
+        has_disabled_2 = any(s.key == "disabled_owner" for s in result_disabled.signals)
+        assert not has_no_owners_2
+        assert has_disabled_2

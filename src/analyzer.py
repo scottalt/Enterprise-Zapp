@@ -39,6 +39,19 @@ HIGH_PRIVILEGE_ROLE_IDS: set[str] = {
     "c79f8feb-a9db-4090-85f9-90d820caa0eb",  # Application.Read.All (used as proxy for sensitivity)
 }
 
+# Delegated permission scope names that are considered high-privilege
+HIGH_PRIVILEGE_DELEGATED_SCOPES: set[str] = {
+    "Directory.ReadWrite.All",
+    "User.ReadWrite.All",
+    "Mail.ReadWrite",
+    "Mail.ReadWriteShared",
+    "Files.ReadWrite.All",
+    "Sites.FullControl.All",
+    "RoleManagement.ReadWrite.Directory",
+    "Group.ReadWrite.All",
+    "Application.ReadWrite.All",
+}
+
 # ── Data classes ──────────────────────────────────────────────────────────────
 
 
@@ -78,9 +91,32 @@ class AppResult:
     is_microsoft_first_party: bool = False
     is_tool_artifact: bool = False
 
+    # Owner detail
+    disabled_owner_count: int = 0
+
     # Informational metadata (no score impact)
     description: str | None = None
     notes: str | None = None
+
+    # Credential warning tier flags
+    has_expiry_warning_secret: bool = False
+    has_expiry_warning_cert: bool = False
+
+    # Redirect URI flags
+    has_no_reply_urls: bool = False
+    has_wildcard_redirect: bool = False
+
+    # Delegated permission flag
+    has_excessive_delegated: bool = False
+
+    # Auth flow flags
+    has_implicit_grant: bool = False
+
+    # Multi-tenant flag
+    is_multi_tenant: bool = False
+
+    # Mixed credential flag
+    has_mixed_credentials: bool = False
 
     # Raw data for report drill-down
     owners: list[dict] = field(default_factory=list)
@@ -160,6 +196,14 @@ def _recommendation_for_signal(key: str, account_enabled: bool) -> str:
         "near_expiry_cert": "Rotate certificate before expiry to avoid service disruption.",
         "high_privilege_stale": "High-privilege app with no recent sign-in activity — investigate necessity and disable if unused.",
         "long_lived_secret": "Replace long-lived secrets with shorter-lived credentials to reduce breach impact.",
+        "expiry_warning_secret": "Client secret expiring in 30-90 days — schedule rotation now to avoid last-minute disruption.",
+        "expiry_warning_cert": "Certificate expiring in 30-90 days — schedule rotation now to avoid last-minute disruption.",
+        "no_reply_urls": "This app has credentials but no redirect URIs configured. Verify it is an intentional service/daemon app. If not in use, consider removal.",
+        "wildcard_redirect_uri": "Remove wildcard or localhost redirect URIs — these enable token theft via open redirect attacks.",
+        "excessive_delegated_permissions": "Review and restrict delegated permissions. High-privilege delegated scopes grant broad access when users consent. Remove scopes not actively needed.",
+        "implicit_grant_enabled": "Disable implicit grant flows in the app registration's Authentication blade. Migrate to authorization code flow with PKCE.",
+        "multi_tenant_app": "Confirm this app must accept external tenant logins. If it only serves your organisation, restrict to 'Accounts in this organizational directory only' in the app registration manifest.",
+        "mixed_credential_types": "This app has both client secrets and certificates. Remove any credentials that are no longer needed — each live credential is an independent attack vector.",
     }
     return recs.get(key, "Review and remediate flagged issues.")
 
@@ -252,7 +296,9 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
         score += 15
 
     # ── Signal: no assignments ────────────────────────────────────────────
-    if len(assignments) == 0 and account_enabled:
+    # ManagedIdentity and SocialIdp principals should not have user assignments
+    _assignment_exempt_types = {"ManagedIdentity", "SocialIdp"}
+    if len(assignments) == 0 and account_enabled and sp_type not in _assignment_exempt_types:
         signals.append(Signal(
             key="no_assignments",
             severity="medium",
@@ -276,6 +322,7 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
     # ── Signal: credentials ───────────────────────────────────────────────
     has_expired_secret = False
     has_near_expiry_secret = False
+    has_expiry_warning_secret = False
     for cred in password_creds:
         end_dt = _parse_dt(cred.get("endDateTime"))
         days_left = _days_until(end_dt)
@@ -284,9 +331,12 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
                 has_expired_secret = True
             elif days_left <= NEAR_EXPIRY_DAYS:
                 has_near_expiry_secret = True
+            elif days_left <= NEAR_EXPIRY_WARN_DAYS:
+                has_expiry_warning_secret = True
 
     has_expired_cert = False
     has_near_expiry_cert = False
+    has_expiry_warning_cert = False
     for cred in key_creds:
         end_dt = _parse_dt(cred.get("endDateTime"))
         days_left = _days_until(end_dt)
@@ -295,6 +345,8 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
                 has_expired_cert = True
             elif days_left <= NEAR_EXPIRY_DAYS:
                 has_near_expiry_cert = True
+            elif days_left <= NEAR_EXPIRY_WARN_DAYS:
+                has_expiry_warning_cert = True
 
     if has_expired_secret:
         signals.append(Signal(
@@ -336,6 +388,33 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
         ))
         score += 15
 
+    # Warning tier: 30–90 days — only fires when credential is not in expired or near_expiry buckets
+    if has_expiry_warning_secret and not has_expired_secret and not has_near_expiry_secret:
+        signals.append(Signal(
+            key="expiry_warning_secret",
+            severity="medium",
+            title=f"Client secret expiring within {NEAR_EXPIRY_WARN_DAYS} days",
+            detail=(
+                f"A client secret expires in {NEAR_EXPIRY_DAYS}–{NEAR_EXPIRY_WARN_DAYS} days. "
+                "Schedule rotation now to avoid last-minute disruption."
+            ),
+            score_contribution=8,
+        ))
+        score += 8
+
+    if has_expiry_warning_cert and not has_expired_cert and not has_near_expiry_cert:
+        signals.append(Signal(
+            key="expiry_warning_cert",
+            severity="medium",
+            title=f"Certificate expiring within {NEAR_EXPIRY_WARN_DAYS} days",
+            detail=(
+                f"A certificate expires in {NEAR_EXPIRY_DAYS}–{NEAR_EXPIRY_WARN_DAYS} days. "
+                "Schedule rotation now to avoid last-minute disruption."
+            ),
+            score_contribution=8,
+        ))
+        score += 8
+
     # ── Signal: long-lived secrets (>1 year) ──────────────────────────────
     long_lived = [
         c for c in password_creds
@@ -349,9 +428,59 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
             severity="low",
             title=f"Long-lived client secret(s) — {len(long_lived)} credential(s) valid >1 year",
             detail="Secrets with lifetimes over one year increase the blast radius of a credential compromise.",
+            score_contribution=15,
+        ))
+        score += 15
+
+    # ── Signal: mixed credential types ────────────────────────────────────
+    has_mixed_credentials = len(password_creds) > 0 and len(key_creds) > 0
+    if has_mixed_credentials:
+        signals.append(Signal(
+            key="mixed_credential_types",
+            severity="low",
+            title="Mixed credential types (secrets and certificates)",
+            detail=(
+                "This app has both client secrets and certificates configured. "
+                "Each live credential is an independent attack vector."
+            ),
             score_contribution=5,
         ))
         score += 5
+
+    # ── Signal: redirect URIs ─────────────────────────────────────────────
+    reply_urls: list[str] = sp.get("replyUrls", [])
+    has_any_cred = len(password_creds) > 0 or len(key_creds) > 0
+
+    has_no_reply_urls = len(reply_urls) == 0 and has_any_cred
+    if has_no_reply_urls:
+        signals.append(Signal(
+            key="no_reply_urls",
+            severity="medium",
+            title="No redirect URIs configured",
+            detail=(
+                "This app has credentials but no redirect URIs configured. "
+                "Verify it is an intentional service/daemon app."
+            ),
+            score_contribution=10,
+        ))
+        score += 10
+
+    has_wildcard_redirect = any(
+        url.startswith(("http://localhost", "https://localhost")) or "*" in url
+        for url in reply_urls
+    )
+    if has_wildcard_redirect:
+        signals.append(Signal(
+            key="wildcard_redirect_uri",
+            severity="high",
+            title="Wildcard or localhost redirect URI detected",
+            detail=(
+                "One or more redirect URIs use localhost or contain a wildcard character. "
+                "These patterns enable token theft via open redirect attacks."
+            ),
+            score_contribution=20,
+        ))
+        score += 20
 
     # ── Signal: high-privilege + stale ────────────────────────────────────
     has_high_privilege = any(
@@ -372,6 +501,94 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
             score_contribution=25,
         ))
         score += 25
+
+    # ── Signal: excessive delegated permissions ────────────────────────────
+    matched_delegated_scopes: list[str] = []
+    for grant in delegated_grants:
+        scope_string = grant.get("scope", "") or ""
+        for token in scope_string.split():
+            if token in HIGH_PRIVILEGE_DELEGATED_SCOPES:
+                matched_delegated_scopes.append(token)
+
+    has_excessive_delegated = len(matched_delegated_scopes) > 0
+    if has_excessive_delegated:
+        unique_scopes = sorted(set(matched_delegated_scopes))
+        scope_list = ", ".join(unique_scopes)
+        if stale_signal:
+            signals.append(Signal(
+                key="excessive_delegated_permissions",
+                severity="critical",
+                title="High-privilege delegated permissions on a stale app",
+                detail=(
+                    f"This app holds high-privilege delegated scopes ({scope_list}) "
+                    "and shows no recent sign-in activity."
+                ),
+                score_contribution=25,
+            ))
+            score += 25
+        else:
+            signals.append(Signal(
+                key="excessive_delegated_permissions",
+                severity="high",
+                title="High-privilege delegated permissions",
+                detail=(
+                    f"This app holds high-privilege delegated scopes: {scope_list}. "
+                    "These grant broad access when users consent."
+                ),
+                score_contribution=20,
+            ))
+            score += 20
+
+    # ── Signal: implicit grant flow ────────────────────────────────────────
+    has_implicit_grant = (
+        sp.get("oauth2AllowIdTokenIssuance", False)
+        or sp.get("oauth2AllowImplicitFlow", False)
+    )
+    if has_implicit_grant:
+        signals.append(Signal(
+            key="implicit_grant_enabled",
+            severity="medium",
+            title="Implicit grant flow is enabled",
+            detail=(
+                "The app registration has implicit ID token or access token issuance enabled. "
+                "Implicit flow is deprecated and vulnerable to token leakage."
+            ),
+            score_contribution=10,
+        ))
+        score += 10
+
+    # ── Signal: multi-tenant app ───────────────────────────────────────────
+    sign_in_audience = sp.get("signInAudience", "")
+    is_multi_tenant = sign_in_audience in (
+        "AzureADMultipleOrgs",
+        "AzureADandPersonalMicrosoftAccount",
+    )
+    if is_multi_tenant:
+        # Escalate if the app also holds high-privilege app or delegated permissions
+        if has_high_privilege or has_excessive_delegated:
+            signals.append(Signal(
+                key="multi_tenant_app",
+                severity="high",
+                title="Multi-tenant app with high-privilege permissions",
+                detail=(
+                    f"This app accepts logins from external tenants (signInAudience: {sign_in_audience}) "
+                    "and holds high-privilege permissions — a significant cross-tenant risk."
+                ),
+                score_contribution=15,
+            ))
+            score += 15
+        else:
+            signals.append(Signal(
+                key="multi_tenant_app",
+                severity="medium",
+                title="Multi-tenant app",
+                detail=(
+                    f"This app accepts logins from external tenants (signInAudience: {sign_in_audience}). "
+                    "Confirm this is intentional."
+                ),
+                score_contribution=10,
+            ))
+            score += 10
 
     # ── Signal: tool artifact ─────────────────────────────────────────────
     if is_tool_artifact:
@@ -413,8 +630,17 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
         tags=sp.get("tags", []),
         is_microsoft_first_party=is_microsoft_first_party,
         is_tool_artifact=is_tool_artifact,
+        disabled_owner_count=len(disabled_owner_ids),
         description=sp.get("description") or None,
         notes=sp.get("notes") or None,
+        has_expiry_warning_secret=has_expiry_warning_secret,
+        has_expiry_warning_cert=has_expiry_warning_cert,
+        has_no_reply_urls=has_no_reply_urls,
+        has_wildcard_redirect=has_wildcard_redirect,
+        has_excessive_delegated=has_excessive_delegated,
+        has_implicit_grant=has_implicit_grant,
+        is_multi_tenant=is_multi_tenant,
+        has_mixed_credentials=has_mixed_credentials,
         owners=owners,
         password_credentials=password_creds,
         key_credentials=key_creds,

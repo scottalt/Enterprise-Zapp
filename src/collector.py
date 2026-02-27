@@ -6,9 +6,9 @@ enriched service principal records ready for analysis.
 """
 
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
 
 from rich.console import Console
 from rich.progress import (
@@ -78,8 +78,13 @@ def collect(client: GraphClient, output_dir: Path, cache_path: Path | None = Non
         task = progress.add_task("Enriching app data...", total=len(all_sps))
 
         for sp in all_sps:
-            sp_id = sp["id"]
+            sp_id = sp.get("id", "")
             app_id = sp.get("appId", "")
+
+            if not sp_id:
+                console.print("[yellow]Warning: skipping SP with missing id field[/yellow]")
+                progress.advance(task)
+                continue
 
             app_role_assignments = client.get_sp_app_role_assignments(sp_id)
             owners = client.get_sp_owners(sp_id)
@@ -96,7 +101,7 @@ def collect(client: GraphClient, output_dir: Path, cache_path: Path | None = Non
                     "_appPermissions": app_permissions,
                     "_signInActivity": sign_in,
                     "_disabledOwnerIds": [
-                        o["id"] for o in owners if o.get("id") in disabled_user_ids
+                        o.get("id") for o in owners if o.get("id") in disabled_user_ids
                     ],
                 }
             )
@@ -111,7 +116,7 @@ def collect(client: GraphClient, output_dir: Path, cache_path: Path | None = Non
 
     # ── Save raw cache ──────────────────────────────────────────────────────
     output_dir.mkdir(parents=True, exist_ok=True)
-    tenant_slug = tenant.get("displayName", "tenant").replace(" ", "_").lower()
+    tenant_slug = re.sub(r"[^\w\-]", "_", tenant.get("displayName", "tenant")).lower()
     date_slug = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     cache_file = output_dir / f"raw_{tenant_slug}_{date_slug}.json"
     cache_file.write_text(json.dumps(result, indent=2, default=str), encoding="utf-8")

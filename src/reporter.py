@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import csv
 import io
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -26,6 +27,29 @@ console = Console()
 TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
 
 
+# ── WeasyPrint availability probe ───────────────────────────────────────────────
+# Test once at import time so every caller gets a consistent answer without
+# risking a crash deep inside report generation.
+
+def _probe_weasyprint() -> tuple[bool, str]:
+    """Return (available, reason_if_not)."""
+    try:
+        from weasyprint import HTML  # noqa: F401  # type: ignore
+        return True, ""
+    except ImportError:
+        return False, "weasyprint is not installed. Run: pip install weasyprint"
+    except Exception as exc:
+        # Native libraries (Pango/GTK/Cairo) missing — common on Windows.
+        return False, (
+            f"weasyprint is installed but its native libraries (Pango/GTK) could not load: {exc}\n"
+            "On Windows, install the GTK3 runtime or use --skip-pdf to skip PDF generation.\n"
+            "The HTML report prints cleanly from any browser (Ctrl+P → Save as PDF)."
+        )
+
+
+WEASYPRINT_AVAILABLE, _WEASYPRINT_REASON = _probe_weasyprint()
+
+
 # ── Jinja2 filters ─────────────────────────────────────────────────────────────
 
 
@@ -39,10 +63,16 @@ def _format_date(value: str | None) -> str:
         return value
 
 
+def _tenant_slug(display_name: str) -> str:
+    """Sanitize a tenant display name for use in file paths."""
+    return re.sub(r"[^\w\-]", "_", display_name).lower()
+
+
 def _build_jinja_env() -> Environment:
     env = Environment(
         loader=FileSystemLoader(str(TEMPLATES_DIR)),
-        autoescape=select_autoescape(["html"]),
+        # Include "html.j2" and "j2" so templates named *.html.j2 are also escaped
+        autoescape=select_autoescape(["html", "html.j2", "j2"]),
     )
     env.filters["format_date"] = _format_date
     return env
@@ -105,6 +135,8 @@ def generate_html(
     stale_days: int,
     output_path: Path,
     hide_microsoft: bool = False,
+    filter_band: str = "all",
+    total_scanned: int | None = None,
 ) -> Path:
     """Render the HTML report and write to output_path."""
     env = _build_jinja_env()
@@ -149,6 +181,8 @@ def generate_html(
         collected_at=collected_at,
         version=__version__,
         total_apps=len(results),
+        total_scanned=total_scanned if total_scanned is not None else len(results),
+        filter_band=filter_band,
         band_counts=bands,
         top_recommendations=_top_recommendations(results),
         critical_high_apps=critical_high,
@@ -187,7 +221,9 @@ def generate_csv(results: list[AppResult], output_path: Path) -> Path:
         "owner_count",
         "assignment_count",
         "has_expired_secret",
+        "earliest_secret_expiry",
         "has_expired_cert",
+        "earliest_cert_expiry",
         "has_near_expiry_secret",
         "has_near_expiry_cert",
         "has_high_privilege",
@@ -202,12 +238,22 @@ def generate_csv(results: list[AppResult], output_path: Path) -> Path:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         for r in results:
+            # Derive earliest expiry dates from credential lists
+            secret_expiries = [
+                c["endDateTime"] for c in r.password_credentials if c.get("endDateTime")
+            ]
+            cert_expiries = [
+                c["endDateTime"] for c in r.key_credentials if c.get("endDateTime")
+            ]
+            earliest_secret = min(secret_expiries) if secret_expiries else ""
+            earliest_cert = min(cert_expiries) if cert_expiries else ""
+
             writer.writerow(
                 {
                     "app_name": r.display_name,
                     "app_id": r.app_id,
                     "object_id": r.sp_id,
-                    "account_enabled": r.account_enabled,
+                    "account_enabled": "yes" if r.account_enabled else "no",
                     "sp_type": r.sp_type,
                     "created_at": r.created_datetime or "",
                     "last_sign_in": r.last_sign_in or "",
@@ -216,13 +262,15 @@ def generate_csv(results: list[AppResult], output_path: Path) -> Path:
                     "risk_band": r.risk_band,
                     "owner_count": r.owner_count,
                     "assignment_count": r.assignment_count,
-                    "has_expired_secret": r.has_expired_secret,
-                    "has_expired_cert": r.has_expired_cert,
-                    "has_near_expiry_secret": r.has_near_expiry_secret,
-                    "has_near_expiry_cert": r.has_near_expiry_cert,
-                    "has_high_privilege": r.has_high_privilege,
-                    "is_microsoft_first_party": r.is_microsoft_first_party,
-                    "is_tool_artifact": r.is_tool_artifact,
+                    "has_expired_secret": "yes" if r.has_expired_secret else "no",
+                    "earliest_secret_expiry": earliest_secret,
+                    "has_expired_cert": "yes" if r.has_expired_cert else "no",
+                    "earliest_cert_expiry": earliest_cert,
+                    "has_near_expiry_secret": "yes" if r.has_near_expiry_secret else "no",
+                    "has_near_expiry_cert": "yes" if r.has_near_expiry_cert else "no",
+                    "has_high_privilege": "yes" if r.has_high_privilege else "no",
+                    "is_microsoft_first_party": "yes" if r.is_microsoft_first_party else "no",
+                    "is_tool_artifact": "yes" if r.is_tool_artifact else "no",
                     "signal_keys": "|".join(s.key for s in r.signals),
                     "signal_count": len(r.signals),
                     "primary_recommendation": r.primary_recommendation,
@@ -237,13 +285,12 @@ def generate_csv(results: list[AppResult], output_path: Path) -> Path:
 
 def generate_pdf(html_path: Path, pdf_path: Path) -> Path | None:
     """Render PDF from the HTML report. Returns path on success, None if weasyprint unavailable."""
-    try:
-        from weasyprint import HTML  # type: ignore
-    except ImportError:
-        console.print("[yellow]weasyprint not installed — skipping PDF generation. Run: pip install weasyprint[/yellow]")
+    if not WEASYPRINT_AVAILABLE:
+        console.print(f"[yellow]PDF skipped — {_WEASYPRINT_REASON}[/yellow]")
         return None
 
     try:
+        from weasyprint import HTML  # type: ignore
         HTML(filename=str(html_path)).write_pdf(str(pdf_path))
         return pdf_path
     except Exception as exc:
@@ -260,12 +307,17 @@ def generate_all(
     stale_days: int,
     output_dir: Path,
     hide_microsoft: bool = False,
+    skip_pdf: bool = False,
+    skip_html: bool = False,
+    skip_csv: bool = False,
+    filter_band: str = "all",
+    total_scanned: int | None = None,
 ) -> dict[str, Path | None]:
     """Generate HTML, CSV, and PDF reports. Returns dict of format → output path."""
     output_dir.mkdir(parents=True, exist_ok=True)
 
     tenant = raw_data.get("tenant", {})
-    tenant_slug = tenant.get("displayName", "tenant").replace(" ", "_").lower()
+    tenant_slug = _tenant_slug(tenant.get("displayName", "tenant"))
     date_slug = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     base = output_dir / f"enterprise_zapp_{tenant_slug}_{date_slug}"
 
@@ -273,17 +325,43 @@ def generate_all(
     csv_path = Path(str(base) + ".csv")
     pdf_path = Path(str(base) + ".pdf")
 
-    console.print("[cyan]Generating HTML report...[/cyan]")
-    html_out = generate_html(results, raw_data, stale_days, html_path, hide_microsoft=hide_microsoft)
-    console.print(f"[green]HTML:[/green] {html_out}")
+    if skip_html:
+        html_out = None
+    else:
+        console.print("[cyan]Generating HTML report...[/cyan]")
+        html_out = generate_html(
+            results, raw_data, stale_days, html_path,
+            hide_microsoft=hide_microsoft,
+            filter_band=filter_band,
+            total_scanned=total_scanned,
+        )
+        console.print(f"[green]HTML:[/green] {html_out}")
 
-    console.print("[cyan]Generating CSV export...[/cyan]")
-    csv_out = generate_csv(results, csv_path)
-    console.print(f"[green]CSV: [/green] {csv_out}")
+    if skip_csv:
+        csv_out = None
+    else:
+        console.print("[cyan]Generating CSV export...[/cyan]")
+        csv_out = generate_csv(results, csv_path)
+        console.print(f"[green]CSV: [/green] {csv_out}")
 
-    console.print("[cyan]Generating PDF export...[/cyan]")
-    pdf_out = generate_pdf(html_path, pdf_path)
-    if pdf_out:
-        console.print(f"[green]PDF: [/green] {pdf_out}")
+    if skip_pdf:
+        pdf_out = None
+    else:
+        if html_out is None:
+            # PDF requires HTML; generate HTML temporarily if it was skipped
+            console.print("[cyan]Generating HTML (required for PDF)...[/cyan]")
+            html_out_tmp = generate_html(
+                results, raw_data, stale_days, html_path,
+                hide_microsoft=hide_microsoft,
+                filter_band=filter_band,
+                total_scanned=total_scanned,
+            )
+            console.print("[cyan]Generating PDF export...[/cyan]")
+            pdf_out = generate_pdf(html_out_tmp, pdf_path)
+        else:
+            console.print("[cyan]Generating PDF export...[/cyan]")
+            pdf_out = generate_pdf(html_out, pdf_path)
+        if pdf_out:
+            console.print(f"[green]PDF: [/green] {pdf_out}")
 
     return {"html": html_out, "csv": csv_out, "pdf": pdf_out}

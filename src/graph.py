@@ -49,7 +49,10 @@ class GraphClient:
                 return resp.json()
 
             if resp.status_code == 429:
-                retry_after = int(resp.headers.get("Retry-After", RETRY_BACKOFF_BASE ** attempt))
+                try:
+                    retry_after = int(resp.headers.get("Retry-After", RETRY_BACKOFF_BASE ** attempt))
+                except ValueError:
+                    retry_after = RETRY_BACKOFF_BASE ** attempt
                 console.print(f"[yellow]Rate limited. Waiting {retry_after}s...[/yellow]")
                 time.sleep(retry_after)
                 continue
@@ -82,10 +85,11 @@ class GraphClient:
         Automatically follows @odata.nextLink until all pages are consumed.
         """
         url = f"{GRAPH_BASE}{path}"
-        query = {"$top": 999, **(params or {})}
+        # Spread caller params first so our $top=999 default always wins
+        query: dict | None = {**(params or {}), "$top": 999}
 
         while url:
-            data = self._get(url, params=query if url.startswith(GRAPH_BASE) else None)
+            data = self._get(url, params=query)
             # On nextLink pages, params are already encoded in the URL
             query = None
             for item in data.get("value", []):
@@ -113,7 +117,8 @@ class GraphClient:
                     "id,appId,displayName,description,accountEnabled,servicePrincipalType,"
                     "tags,appRoles,oauth2PermissionScopes,"
                     "passwordCredentials,keyCredentials,createdDateTime,"
-                    "appOwnerOrganizationId,homepage,replyUrls,notes"
+                    "appOwnerOrganizationId,homepage,replyUrls,notes,"
+                    "oauth2AllowIdTokenIssuance,oauth2AllowImplicitFlow,signInAudience"
                 )
             },
         )
@@ -164,7 +169,8 @@ class GraphClient:
                 data = self._get(url, params=query)
                 query = None
                 for item in data.get("value", []):
-                    activities[item["appId"]] = item
+                    if app_id := item.get("appId"):
+                        activities[app_id] = item
                 url = data.get("@odata.nextLink")
             return activities
         except (PermissionError, RuntimeError) as exc:
@@ -179,7 +185,8 @@ class GraphClient:
                 "/users",
                 params={"$filter": "accountEnabled eq false", "$select": "id"},
             ):
-                disabled_ids.add(user["id"])
+                if uid := user.get("id"):
+                    disabled_ids.add(uid)
             return disabled_ids
         except (PermissionError, RuntimeError):
             return set()
