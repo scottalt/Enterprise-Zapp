@@ -125,6 +125,7 @@
   tbody td { padding: 10px 14px; font-size: 13px; vertical-align: middle; }
   .app-name { font-weight: 600; color: var(--text); }
   .app-id   { font-size: 11px; color: var(--muted); font-family: monospace; }
+  .app-desc { font-size: 11px; color: var(--muted); margin-top: 3px; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-style: italic; }
 
   /* ── Expandable rows ─────────────────────────────────────────────────── */
   .expand-row { display: none; background: var(--surface2); }
@@ -425,6 +426,10 @@
             <td>
               <div class="app-name">{{ app.display_name }}</div>
               <div class="app-id">{{ app.app_id }}</div>
+              {% set _desc = (app.description or app.notes or '') | trim %}
+              {% if _desc %}
+              <div class="app-desc" title="{{ _desc }}">{{ _desc[:100] }}{{ '…' if _desc | length > 100 else '' }}</div>
+              {% endif %}
             </td>
             <td data-val="{{ app.risk_score }}">
               <div class="score-bar-wrap">
@@ -485,6 +490,10 @@
             <td>
               <div class="app-name">{{ app.display_name }}</div>
               <div class="app-id">{{ app.app_id }}</div>
+              {% set _desc = (app.description or app.notes or '') | trim %}
+              {% if _desc %}
+              <div class="app-desc" title="{{ _desc }}">{{ _desc[:100] }}{{ '…' if _desc | length > 100 else '' }}</div>
+              {% endif %}
             </td>
             <td>
               <div class="score-bar-wrap">
@@ -544,6 +553,10 @@
             <td>
               <div class="app-name">{{ app.display_name }}</div>
               <div class="app-id">{{ app.app_id }}</div>
+              {% set _desc = (app.description or app.notes or '') | trim %}
+              {% if _desc %}
+              <div class="app-desc" title="{{ _desc }}">{{ _desc[:100] }}{{ '…' if _desc | length > 100 else '' }}</div>
+              {% endif %}
             </td>
             <td>{{ app.last_sign_in | format_date if app.last_sign_in else 'Never' }}</td>
             <td>{% if app.days_since_sign_in is not none %}{{ app.days_since_sign_in }}d{% else %}—{% endif %}</td>
@@ -583,6 +596,10 @@
             <td>
               <div class="app-name">{{ app.display_name }}</div>
               <div class="app-id">{{ app.app_id }}</div>
+              {% set _desc = (app.description or app.notes or '') | trim %}
+              {% if _desc %}
+              <div class="app-desc" title="{{ _desc }}">{{ _desc[:100] }}{{ '…' if _desc | length > 100 else '' }}</div>
+              {% endif %}
             </td>
             <td>{% if app.has_expired_secret %}<span class="badge badge-critical">Yes</span>{% else %}—{% endif %}</td>
             <td>{% if app.has_expired_cert %}<span class="badge badge-critical">Yes</span>{% else %}—{% endif %}</td>
@@ -621,6 +638,10 @@
             <td>
               <div class="app-name">{{ app.display_name }}</div>
               <div class="app-id">{{ app.app_id }}</div>
+              {% set _desc = (app.description or app.notes or '') | trim %}
+              {% if _desc %}
+              <div class="app-desc" title="{{ _desc }}">{{ _desc[:100] }}{{ '…' if _desc | length > 100 else '' }}</div>
+              {% endif %}
             </td>
             <td>{{ app.owner_count }}</td>
             <td>{{ app.owners | selectattr('id', 'in', app.owners | map(attribute='id') | list) | list | length }}</td>
@@ -657,6 +678,10 @@
             <td>
               <div class="app-name">{{ app.display_name }}</div>
               <div class="app-id">{{ app.app_id }}</div>
+              {% set _desc = (app.description or app.notes or '') | trim %}
+              {% if _desc %}
+              <div class="app-desc" title="{{ _desc }}">{{ _desc[:100] }}{{ '…' if _desc | length > 100 else '' }}</div>
+              {% endif %}
             </td>
             <td>{{ app.last_sign_in | format_date if app.last_sign_in else '—' }}</td>
             <td><span class="badge badge-critical">Yes</span></td>

@@ -78,6 +78,10 @@ class AppResult:
     is_microsoft_first_party: bool = False
     is_tool_artifact: bool = False
 
+    # Informational metadata (no score impact)
+    description: str | None = None
+    notes: str | None = None
+
     # Raw data for report drill-down
     owners: list[dict] = field(default_factory=list)
     password_credentials: list[dict] = field(default_factory=list)
@@ -409,6 +413,8 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
         tags=sp.get("tags", []),
         is_microsoft_first_party=is_microsoft_first_party,
         is_tool_artifact=is_tool_artifact,
+        description=sp.get("description") or None,
+        notes=sp.get("notes") or None,
         owners=owners,
         password_credentials=password_creds,
         key_credentials=key_creds,
