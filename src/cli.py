@@ -8,6 +8,7 @@ Usage:
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -134,8 +135,11 @@ def main(
     # ── Authenticate ────────────────────────────────────────────────────────
     if from_cache:
         console.print(f"[cyan]Cache mode — loading data from {from_cache}[/cyan]")
-        import json
-        raw_data = json.loads(from_cache.read_text(encoding="utf-8"))
+        try:
+            raw_data = json.loads(from_cache.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError) as exc:
+            console.print(f"[red]Error reading cache file: {exc}[/red]")
+            sys.exit(1)
         tenant_name = raw_data.get("tenant", {}).get("displayName", "cached tenant")
         console.print(f"[green]Loaded cache for:[/green] {tenant_name}")
     else:

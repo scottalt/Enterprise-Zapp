@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Enterprise-Zapp one-time setup script.
     Creates a temporary, read-only app registration in your Entra ID tenant

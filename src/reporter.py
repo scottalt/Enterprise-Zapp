@@ -107,7 +107,11 @@ def generate_html(
 ) -> Path:
     """Render the HTML report and write to output_path."""
     env = _build_jinja_env()
-    template = env.get_template("report.html.j2")
+    try:
+        template = env.get_template("report.html.j2")
+    except Exception as exc:
+        console.print(f"[red]Error loading report template: {exc}[/red]")
+        raise
 
     tenant = raw_data.get("tenant", {})
     bands = band_counts(results)
