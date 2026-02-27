@@ -42,7 +42,7 @@ def load_config(config_path: Path | None = None) -> dict:
         )
         sys.exit(1)
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        return json.loads(path.read_text(encoding="utf-8-sig"))
     except json.JSONDecodeError as exc:
         console.print(f"[red]Error reading config file {path}: {exc}[/red]")
         sys.exit(1)
