@@ -387,6 +387,78 @@
     </ul>
   </div>
 
+  <!-- ── Full Inventory ─────────────────────────────────────────────────── -->
+  <div class="section">
+    <div class="section-title">
+      Full App Inventory
+      <div class="section-subtitle">All {{ total_apps }} enterprise apps — sortable and filterable</div>
+    </div>
+    <div class="band-filters" id="inv-band-filters">
+      <button class="band-btn active-all" data-band="" onclick="setBandFilter(this, '')">All</button>
+      <button class="band-btn" data-band="critical" onclick="setBandFilter(this, 'critical')">Critical</button>
+      <button class="band-btn" data-band="high" onclick="setBandFilter(this, 'high')">High</button>
+      <button class="band-btn" data-band="medium" onclick="setBandFilter(this, 'medium')">Medium</button>
+      <button class="band-btn" data-band="low" onclick="setBandFilter(this, 'low')">Low</button>
+      <button class="band-btn" data-band="clean" onclick="setBandFilter(this, 'clean')">Clean</button>
+      <button class="ms-toggle-btn" id="ms-toggle" onclick="toggleMicrosoft()">Hide Microsoft Apps</button>
+    </div>
+    <div class="filter-bar">
+      <input type="text" id="inv-search" placeholder="Search by name or app ID..." oninput="filterTable()">
+    </div>
+    <div class="table-wrap">
+      <table id="tbl-inventory">
+        <thead>
+          <tr>
+            <th onclick="sortTable('tbl-inventory', 0)">App Name</th>
+            <th onclick="sortTable('tbl-inventory', 1)">Risk Score</th>
+            <th onclick="sortTable('tbl-inventory', 2)">Risk Band</th>
+            <th onclick="sortTable('tbl-inventory', 3)">Last Sign-In</th>
+            <th onclick="sortTable('tbl-inventory', 4)">Owners</th>
+            <th onclick="sortTable('tbl-inventory', 5)">Assigned</th>
+            <th onclick="sortTable('tbl-inventory', 6)">Enabled</th>
+            <th>Signals</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for app in all_apps %}
+          <tr data-band="{{ app.risk_band }}" data-name="{{ app.display_name | lower }}" data-appid="{{ app.app_id | lower }}" data-microsoft="{{ 'true' if app.is_microsoft_first_party else 'false' }}" data-artifact="{{ 'true' if app.is_tool_artifact else 'false' }}">
+            <td>
+              <div class="app-name">{{ app.display_name }}</div>
+              <div class="app-id">{{ app.app_id }}</div>
+            </td>
+            <td data-val="{{ app.risk_score }}">
+              <div class="score-bar-wrap">
+                <div class="score-bar">
+                  <div class="score-bar-fill" style="width: {{ app.risk_score }}%; background: var(--{{ app.risk_band }})"></div>
+                </div>
+                <span class="score-num" style="color: var(--{{ app.risk_band }})">{{ app.risk_score }}</span>
+              </div>
+            </td>
+            <td data-val="{{ app.risk_band }}"><span class="badge badge-{{ app.risk_band }}">{{ app.risk_band }}</span></td>
+            <td data-val="{{ app.days_since_sign_in if app.days_since_sign_in is not none else 99999 }}">
+              {{ app.last_sign_in | format_date if app.last_sign_in else '—' }}
+            </td>
+            <td data-val="{{ app.owner_count }}">{{ app.owner_count }}</td>
+            <td data-val="{{ app.assignment_count }}">{{ app.assignment_count }}</td>
+            <td>{% if app.account_enabled %}<span style="color: var(--clean)">Yes</span>{% else %}<span style="color: var(--critical)">No</span>{% endif %}</td>
+            <td>
+              <div class="signals" style="gap: 4px;">
+                {% for sig in app.signals[:3] %}
+                <span class="signal-chip signal-{{ sig.severity }}" title="{{ sig.detail }}">{{ sig.key.replace('_', ' ') }}</span>
+                {% endfor %}
+                {% if app.signals | length > 3 %}
+                <span style="color: var(--muted); font-size: 11px;">+{{ app.signals | length - 3 }} more</span>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div id="inv-count" style="margin-top: 8px; font-size: 12px; color: var(--muted);"></div>
+  </div>
+
   <!-- ── Critical & High Risk Apps ─────────────────────────────────────── -->
   {% if critical_high_apps %}
   <div class="section">
@@ -596,78 +668,6 @@
     </div>
   </div>
   {% endif %}
-
-  <!-- ── Full Inventory ─────────────────────────────────────────────────── -->
-  <div class="section">
-    <div class="section-title">
-      Full App Inventory
-      <div class="section-subtitle">All {{ total_apps }} enterprise apps — sortable and filterable</div>
-    </div>
-    <div class="band-filters" id="inv-band-filters">
-      <button class="band-btn active-all" data-band="" onclick="setBandFilter(this, '')">All</button>
-      <button class="band-btn" data-band="critical" onclick="setBandFilter(this, 'critical')">Critical</button>
-      <button class="band-btn" data-band="high" onclick="setBandFilter(this, 'high')">High</button>
-      <button class="band-btn" data-band="medium" onclick="setBandFilter(this, 'medium')">Medium</button>
-      <button class="band-btn" data-band="low" onclick="setBandFilter(this, 'low')">Low</button>
-      <button class="band-btn" data-band="clean" onclick="setBandFilter(this, 'clean')">Clean</button>
-      <button class="ms-toggle-btn" id="ms-toggle" onclick="toggleMicrosoft()">Hide Microsoft Apps</button>
-    </div>
-    <div class="filter-bar">
-      <input type="text" id="inv-search" placeholder="Search by name or app ID..." oninput="filterTable()">
-    </div>
-    <div class="table-wrap">
-      <table id="tbl-inventory">
-        <thead>
-          <tr>
-            <th onclick="sortTable('tbl-inventory', 0)">App Name</th>
-            <th onclick="sortTable('tbl-inventory', 1)">Risk Score</th>
-            <th onclick="sortTable('tbl-inventory', 2)">Risk Band</th>
-            <th onclick="sortTable('tbl-inventory', 3)">Last Sign-In</th>
-            <th onclick="sortTable('tbl-inventory', 4)">Owners</th>
-            <th onclick="sortTable('tbl-inventory', 5)">Assigned</th>
-            <th onclick="sortTable('tbl-inventory', 6)">Enabled</th>
-            <th>Signals</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for app in all_apps %}
-          <tr data-band="{{ app.risk_band }}" data-name="{{ app.display_name | lower }}" data-appid="{{ app.app_id | lower }}" data-microsoft="{{ 'true' if app.is_microsoft_first_party else 'false' }}" data-artifact="{{ 'true' if app.is_tool_artifact else 'false' }}">
-            <td>
-              <div class="app-name">{{ app.display_name }}</div>
-              <div class="app-id">{{ app.app_id }}</div>
-            </td>
-            <td data-val="{{ app.risk_score }}">
-              <div class="score-bar-wrap">
-                <div class="score-bar">
-                  <div class="score-bar-fill" style="width: {{ app.risk_score }}%; background: var(--{{ app.risk_band }})"></div>
-                </div>
-                <span class="score-num" style="color: var(--{{ app.risk_band }})">{{ app.risk_score }}</span>
-              </div>
-            </td>
-            <td data-val="{{ app.risk_band }}"><span class="badge badge-{{ app.risk_band }}">{{ app.risk_band }}</span></td>
-            <td data-val="{{ app.days_since_sign_in if app.days_since_sign_in is not none else 99999 }}">
-              {{ app.last_sign_in | format_date if app.last_sign_in else '—' }}
-            </td>
-            <td data-val="{{ app.owner_count }}">{{ app.owner_count }}</td>
-            <td data-val="{{ app.assignment_count }}">{{ app.assignment_count }}</td>
-            <td>{% if app.account_enabled %}<span style="color: var(--clean)">Yes</span>{% else %}<span style="color: var(--critical)">No</span>{% endif %}</td>
-            <td>
-              <div class="signals" style="gap: 4px;">
-                {% for sig in app.signals[:3] %}
-                <span class="signal-chip signal-{{ sig.severity }}" title="{{ sig.detail }}">{{ sig.key.replace('_', ' ') }}</span>
-                {% endfor %}
-                {% if app.signals | length > 3 %}
-                <span style="color: var(--muted); font-size: 11px;">+{{ app.signals | length - 3 }} more</span>
-                {% endif %}
-              </div>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    <div id="inv-count" style="margin-top: 8px; font-size: 12px; color: var(--muted);"></div>
-  </div>
 
   <!-- ── Methodology ────────────────────────────────────────────────────── -->
   <div class="section">
