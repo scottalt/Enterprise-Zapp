@@ -109,10 +109,10 @@ class GraphClient:
             "/servicePrincipals",
             params={
                 "$select": (
-                    "id,appId,displayName,accountEnabled,servicePrincipalType,"
+                    "id,appId,displayName,description,accountEnabled,servicePrincipalType,"
                     "tags,appRoles,oauth2PermissionScopes,"
                     "passwordCredentials,keyCredentials,createdDateTime,"
-                    "appOwnerOrganizationId,homepage,replyUrls"
+                    "appOwnerOrganizationId,homepage,replyUrls,notes"
                 )
             },
         )
