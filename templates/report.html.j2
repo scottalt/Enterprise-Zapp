@@ -164,6 +164,34 @@
     border-radius: 8px; padding: 8px 14px; font-size: 13px; outline: none; cursor: pointer;
   }
 
+  /* ── Risk band filter buttons ────────────────────────────────────────── */
+  .band-filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+  .band-btn {
+    border: 1px solid var(--border); background: var(--surface); color: var(--muted);
+    border-radius: 20px; padding: 4px 14px; font-size: 12px; font-weight: 600;
+    cursor: pointer; transition: background 0.15s, color 0.15s, border-color 0.15s;
+    user-select: none;
+  }
+  .band-btn:hover { color: var(--text); border-color: var(--muted); }
+  .band-btn.active-all  { background: rgba(129,140,248,0.18); border-color: var(--brand); color: var(--brand); }
+  .band-btn.active-critical { background: rgba(239,68,68,0.15); border-color: var(--critical); color: var(--critical); }
+  .band-btn.active-high     { background: rgba(249,115,22,0.15); border-color: var(--high); color: var(--high); }
+  .band-btn.active-medium   { background: rgba(234,179,8,0.15); border-color: var(--medium); color: var(--medium); }
+  .band-btn.active-low      { background: rgba(34,197,94,0.15); border-color: var(--low); color: var(--low); }
+  .band-btn.active-clean    { background: rgba(16,185,129,0.15); border-color: var(--clean); color: var(--clean); }
+
+  /* ── Microsoft toggle button ─────────────────────────────────────────── */
+  .ms-toggle-btn {
+    border: 1px solid var(--border); background: var(--surface); color: var(--muted);
+    border-radius: 20px; padding: 4px 14px; font-size: 12px; font-weight: 600;
+    cursor: pointer; transition: background 0.15s, color 0.15s, border-color 0.15s;
+    user-select: none;
+  }
+  .ms-toggle-btn:hover { color: var(--text); border-color: var(--muted); }
+  .ms-toggle-btn.hiding {
+    background: rgba(56,189,248,0.1); border-color: var(--accent); color: var(--accent);
+  }
+
   /* ── Top recommendations ─────────────────────────────────────────────── */
   .rec-list { list-style: none; }
   .rec-list li {
@@ -575,16 +603,17 @@
       Full App Inventory
       <div class="section-subtitle">All {{ total_apps }} enterprise apps — sortable and filterable</div>
     </div>
+    <div class="band-filters" id="inv-band-filters">
+      <button class="band-btn active-all" data-band="" onclick="setBandFilter(this, '')">All</button>
+      <button class="band-btn" data-band="critical" onclick="setBandFilter(this, 'critical')">Critical</button>
+      <button class="band-btn" data-band="high" onclick="setBandFilter(this, 'high')">High</button>
+      <button class="band-btn" data-band="medium" onclick="setBandFilter(this, 'medium')">Medium</button>
+      <button class="band-btn" data-band="low" onclick="setBandFilter(this, 'low')">Low</button>
+      <button class="band-btn" data-band="clean" onclick="setBandFilter(this, 'clean')">Clean</button>
+      <button class="ms-toggle-btn" id="ms-toggle" onclick="toggleMicrosoft()">Hide Microsoft Apps</button>
+    </div>
     <div class="filter-bar">
       <input type="text" id="inv-search" placeholder="Search by name or app ID..." oninput="filterTable()">
-      <select id="inv-band" onchange="filterTable()">
-        <option value="">All risk bands</option>
-        <option value="critical">Critical</option>
-        <option value="high">High</option>
-        <option value="medium">Medium</option>
-        <option value="low">Low</option>
-        <option value="clean">Clean</option>
-      </select>
     </div>
     <div class="table-wrap">
       <table id="tbl-inventory">
@@ -602,7 +631,7 @@
         </thead>
         <tbody>
           {% for app in all_apps %}
-          <tr data-band="{{ app.risk_band }}" data-name="{{ app.display_name | lower }}" data-appid="{{ app.app_id | lower }}">
+          <tr data-band="{{ app.risk_band }}" data-name="{{ app.display_name | lower }}" data-appid="{{ app.app_id | lower }}" data-microsoft="{{ 'true' if app.is_microsoft_first_party else 'false' }}" data-artifact="{{ 'true' if app.is_tool_artifact else 'false' }}">
             <td>
               <div class="app-name">{{ app.display_name }}</div>
               <div class="app-id">{{ app.app_id }}</div>
@@ -735,26 +764,86 @@ function sortTable(tableId, colIndex) {
   rows.forEach(row => tbody.appendChild(row));
 }
 
+// ── Inventory filter state ────────────────────────────────────────────────────
+let _activeBand = '';
+let _hideMicrosoft = false;
+
+// ── Band filter buttons ───────────────────────────────────────────────────────
+function setBandFilter(btn, band) {
+  _activeBand = band;
+
+  // Update button active classes
+  document.querySelectorAll('#inv-band-filters .band-btn').forEach(function(b) {
+    // Remove all active-* classes
+    b.className = b.className.replace(/\bactive-\S+/g, '').trim();
+  });
+
+  if (band === '') {
+    btn.classList.add('active-all');
+  } else {
+    btn.classList.add('active-' + band);
+  }
+
+  filterTable();
+}
+
+// ── Microsoft toggle ──────────────────────────────────────────────────────────
+function toggleMicrosoft() {
+  _hideMicrosoft = !_hideMicrosoft;
+  var btn = document.getElementById('ms-toggle');
+  filterTable();  // Apply filter first to know the hidden count
+
+  if (_hideMicrosoft) {
+    var hiddenCount = document.querySelectorAll('#tbl-inventory tbody tr[data-microsoft="true"]').length;
+    btn.textContent = 'Show All (' + hiddenCount + ' Microsoft hidden)';
+    btn.classList.add('hiding');
+  } else {
+    btn.textContent = 'Hide Microsoft Apps';
+    btn.classList.remove('hiding');
+  }
+}
+
 // ── Inventory filter ─────────────────────────────────────────────────────────
 function filterTable() {
   const search = document.getElementById('inv-search').value.toLowerCase();
-  const band   = document.getElementById('inv-band').value.toLowerCase();
   const rows   = document.querySelectorAll('#tbl-inventory tbody tr');
   let visible  = 0;
 
-  rows.forEach(row => {
-    const name   = row.dataset.name   || '';
-    const appid  = row.dataset.appid  || '';
-    const rband  = row.dataset.band   || '';
-    const matchSearch = !search || name.includes(search) || appid.includes(search);
-    const matchBand   = !band   || rband === band;
-    const show = matchSearch && matchBand;
+  rows.forEach(function(row) {
+    const name      = row.dataset.name      || '';
+    const appid     = row.dataset.appid     || '';
+    const rband     = row.dataset.band      || '';
+    const isMsft    = row.dataset.microsoft === 'true';
+
+    const matchSearch    = !search      || name.includes(search) || appid.includes(search);
+    const matchBand      = !_activeBand || rband === _activeBand;
+    const matchMicrosoft = !_hideMicrosoft || !isMsft;
+
+    const show = matchSearch && matchBand && matchMicrosoft;
     row.style.display = show ? '' : 'none';
     if (show) visible++;
   });
 
   const counter = document.getElementById('inv-count');
-  counter.textContent = `Showing ${visible} of ${rows.length} apps`;
+  const total   = document.querySelectorAll('#tbl-inventory tbody tr').length;
+  counter.textContent = 'Showing ' + visible + ' of ' + total + ' apps';
+
+  // Keep toggle button count in sync when other filters change while MS hidden
+  if (_hideMicrosoft) {
+    var msHiddenAndMatchOther = 0;
+    rows.forEach(function(row) {
+      if (row.dataset.microsoft === 'true') {
+        const name   = row.dataset.name  || '';
+        const appid  = row.dataset.appid || '';
+        const rband  = row.dataset.band  || '';
+        const matchS = !search      || name.includes(search) || appid.includes(search);
+        const matchB = !_activeBand || rband === _activeBand;
+        if (matchS && matchB) msHiddenAndMatchOther++;
+      }
+    });
+    var btn = document.getElementById('ms-toggle');
+    btn.textContent = 'Show All (' + msHiddenAndMatchOther + ' Microsoft hidden)';
+  }
 }
 
 // Init counter
