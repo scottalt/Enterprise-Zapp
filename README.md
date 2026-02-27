@@ -226,6 +226,13 @@ The scan still runs, but sign-in activity data will be unavailable. Staleness si
 
 ---
 
+## Author
+
+**Scott Altiparmak**
+[linkedin.com/in/scottaltiparmak](https://www.linkedin.com/in/scottaltiparmak/)
+
+---
+
 ## Contributing
 
 Contributions are welcome. Please open an issue before submitting a large pull request.
@@ -243,4 +250,12 @@ Contributions are welcome. Please open an issue before submitting a large pull r
 
 ## Disclaimer
 
-Enterprise-Zapp is provided as-is for informational purposes. It does not constitute security advice. Always validate findings in your environment and follow your organisation's change management processes before taking remediation actions.
+> **IMPORTANT — READ BEFORE USE**
+>
+> Enterprise-Zapp is provided **"as-is"**, without warranty of any kind, express or implied. The author, **Scott Altiparmak**, accepts **no responsibility or liability** for any issues, damages, data loss, security incidents, tenant disruptions, compliance violations, or any other consequences arising from running this tool in your environment.
+>
+> - This tool is provided for **informational and educational purposes only** and does not constitute security advice.
+> - You are solely responsible for validating all findings in your environment before taking any remediation action.
+> - Always follow your organisation's change management, security review, and approval processes.
+> - Test in a non-production or lab environment before running against any sensitive tenant.
+> - By using this tool you agree that you do so **entirely at your own risk**.
