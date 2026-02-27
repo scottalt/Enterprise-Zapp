@@ -43,8 +43,7 @@ $RequiredPermissions = @(
     @{ Api = "00000003-0000-0000-c000-000000000000"; Permission = "Application.Read.All";  Id = "9a5d68dd-52b0-4cc2-bd40-abcf44ac3a30" },
     @{ Api = "00000003-0000-0000-c000-000000000000"; Permission = "Directory.Read.All";    Id = "7ab1d382-f21e-4acd-a863-ba3e13f7da61" },
     @{ Api = "00000003-0000-0000-c000-000000000000"; Permission = "AuditLog.Read.All";     Id = "b0afded3-3588-46d8-8b3d-9842eff778da" },
-    @{ Api = "00000003-0000-0000-c000-000000000000"; Permission = "Reports.Read.All";      Id = "230c1aed-a721-4c5d-9cb4-a90514e508ef" },
-    @{ Api = "00000003-0000-0000-c000-000000000000"; Permission = "Policy.Read.All";       Id = "246dd0d5-5bd0-4def-940b-0421030a5b68" }
+    @{ Api = "00000003-0000-0000-c000-000000000000"; Permission = "User.Read.All";         Id = "df021288-bdef-4463-88db-98f22de89214" }
 )
 
 function Write-Banner {

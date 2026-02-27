@@ -14,6 +14,7 @@ from rich.console import Console
 console = Console()
 
 GRAPH_BASE = "https://graph.microsoft.com/v1.0"
+GRAPH_BETA = "https://graph.microsoft.com/beta"
 MAX_RETRIES = 5
 RETRY_BACKOFF_BASE = 2  # seconds; doubles each retry
 
@@ -156,8 +157,15 @@ class GraphClient:
         """
         try:
             activities: dict[str, dict] = {}
-            for item in self.get_paged("/reports/servicePrincipalSignInActivities"):
-                activities[item["appId"]] = item
+            # This endpoint is beta-only — not available on v1.0
+            url = f"{GRAPH_BETA}/reports/servicePrincipalSignInActivities"
+            query: dict | None = {"$top": 999}
+            while url:
+                data = self._get(url, params=query)
+                query = None
+                for item in data.get("value", []):
+                    activities[item["appId"]] = item
+                url = data.get("@odata.nextLink")
             return activities
         except (PermissionError, RuntimeError) as exc:
             console.print(f"[yellow]Warning: Could not fetch sign-in activity data ({exc}). Staleness signals will be limited.[/yellow]")
