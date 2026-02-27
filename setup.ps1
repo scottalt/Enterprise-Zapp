@@ -171,9 +171,10 @@ function New-AppRegistration {
         }
 
         $AppParams = @{
-            DisplayName            = $AppName
-            SignInAudience         = "AzureADMyOrg"
-            RequiredResourceAccess = @(
+            DisplayName              = $AppName
+            SignInAudience           = "AzureADMyOrg"
+            IsFallbackPublicClient   = $true   # required for MSAL device code flow
+            RequiredResourceAccess   = @(
                 @{
                     ResourceAppId  = "00000003-0000-0000-c000-000000000000"
                     ResourceAccess = $GraphResourceAccess
@@ -183,6 +184,12 @@ function New-AppRegistration {
 
         $App = New-MgApplication @AppParams
         Write-Host "[+] App registration created. App ID: $($App.AppId)" -ForegroundColor Green
+    }
+
+    # Ensure public client flows are enabled (covers apps created before this fix)
+    if (-not $App.IsFallbackPublicClient) {
+        Update-MgApplication -ApplicationId $App.Id -IsFallbackPublicClient:$true
+        Write-Host "[+] Enabled public client flows on app registration." -ForegroundColor Green
     }
 
     # Grant admin consent via service principal
