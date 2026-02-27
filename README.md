@@ -220,18 +220,16 @@ enterprise-zapp --output ./reports/q1-audit/
 
 ## Permissions Used
 
-Enterprise-Zapp requests the following **read-only** Microsoft Graph permissions:
+Enterprise-Zapp requests the following **application, read-only** Microsoft Graph permissions — the minimum required to perform each API call:
 
-| Permission | Purpose |
-|------------|---------|
-| `Application.Read.All` | Read enterprise app and service principal data |
-| `Directory.Read.All` | Read users, groups, and org structure |
-| `AuditLog.Read.All` | Read sign-in logs for staleness detection |
-| `Reports.Read.All` | Read service principal sign-in activity |
-| `Policy.Read.All` | Read conditional access and policy data |
-| `Organization.Read.All` | Read tenant display name |
+| Permission | Purpose | Required by |
+|------------|---------|-------------|
+| `Application.Read.All` | Read service principals, their owners, and app role assignments | Core scan |
+| `Directory.Read.All` | Read delegated permission grants (`oauth2PermissionGrants`) | Delegated grant analysis |
+| `AuditLog.Read.All` | Read service principal sign-in activity (beta endpoint) | Staleness detection |
+| `User.Read.All` | Read disabled/deleted user accounts for orphan detection | Owner validation |
 
-> **Note:** Sign-in activity (`AuditLog.Read.All`) requires Entra ID P1/P2 licensing. In free tenants, staleness signals will be limited — the report notes which data was unavailable.
+> **Entra ID P1/P2 required for sign-in activity.** The `AuditLog.Read.All` permission alone is not sufficient — the underlying `servicePrincipalSignInActivities` API requires an Entra ID Premium P1 or P2 license. Without it the scan still runs, but staleness signals will be unavailable. The report notes clearly when this data is missing.
 
 ---
 
