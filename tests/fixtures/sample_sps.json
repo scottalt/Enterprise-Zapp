@@ -1,0 +1,132 @@
+[
+  {
+    "id": "aaaaaaaa-0001-0001-0001-aaaaaaaaaaaa",
+    "appId": "bbbbbbbb-0001-0001-0001-bbbbbbbbbbbb",
+    "displayName": "Healthy App",
+    "accountEnabled": true,
+    "servicePrincipalType": "Application",
+    "tags": ["WindowsAzureActiveDirectoryIntegratedApp"],
+    "createdDateTime": "2024-01-15T10:00:00Z",
+    "passwordCredentials": [],
+    "keyCredentials": [],
+    "_assignments": [{"id": "assign-1", "principalType": "User"}],
+    "_owners": [{"id": "user-1", "displayName": "Alice Smith", "accountEnabled": true}],
+    "_delegatedGrants": [],
+    "_appPermissions": [],
+    "_signInActivity": {
+      "appId": "bbbbbbbb-0001-0001-0001-bbbbbbbbbbbb",
+      "lastSignInActivity": { "lastSignInDateTime": "2026-02-20T12:00:00Z" }
+    },
+    "_disabledOwnerIds": []
+  },
+  {
+    "id": "aaaaaaaa-0002-0002-0002-aaaaaaaaaaaa",
+    "appId": "bbbbbbbb-0002-0002-0002-bbbbbbbbbbbb",
+    "displayName": "Stale App With No Owners",
+    "accountEnabled": true,
+    "servicePrincipalType": "Application",
+    "tags": ["WindowsAzureActiveDirectoryIntegratedApp"],
+    "createdDateTime": "2021-06-01T10:00:00Z",
+    "passwordCredentials": [],
+    "keyCredentials": [],
+    "_assignments": [],
+    "_owners": [],
+    "_delegatedGrants": [],
+    "_appPermissions": [],
+    "_signInActivity": {
+      "appId": "bbbbbbbb-0002-0002-0002-bbbbbbbbbbbb",
+      "lastSignInActivity": { "lastSignInDateTime": "2025-01-01T00:00:00Z" }
+    },
+    "_disabledOwnerIds": []
+  },
+  {
+    "id": "aaaaaaaa-0003-0003-0003-aaaaaaaaaaaa",
+    "appId": "bbbbbbbb-0003-0003-0003-bbbbbbbbbbbb",
+    "displayName": "App With Expired Secret",
+    "accountEnabled": true,
+    "servicePrincipalType": "Application",
+    "tags": [],
+    "createdDateTime": "2022-03-10T10:00:00Z",
+    "passwordCredentials": [
+      {
+        "keyId": "cred-1",
+        "displayName": "Primary Secret",
+        "startDateTime": "2022-03-10T10:00:00Z",
+        "endDateTime": "2023-03-10T10:00:00Z"
+      }
+    ],
+    "keyCredentials": [],
+    "_assignments": [{"id": "assign-2", "principalType": "Group"}],
+    "_owners": [{"id": "user-2", "displayName": "Bob Jones", "accountEnabled": true}],
+    "_delegatedGrants": [],
+    "_appPermissions": [],
+    "_signInActivity": {
+      "appId": "bbbbbbbb-0003-0003-0003-bbbbbbbbbbbb",
+      "lastSignInActivity": { "lastSignInDateTime": "2026-01-15T10:00:00Z" }
+    },
+    "_disabledOwnerIds": []
+  },
+  {
+    "id": "aaaaaaaa-0004-0004-0004-aaaaaaaaaaaa",
+    "appId": "bbbbbbbb-0004-0004-0004-bbbbbbbbbbbb",
+    "displayName": "High Privilege Stale App",
+    "accountEnabled": true,
+    "servicePrincipalType": "Application",
+    "tags": [],
+    "createdDateTime": "2020-01-01T10:00:00Z",
+    "passwordCredentials": [],
+    "keyCredentials": [],
+    "_assignments": [],
+    "_owners": [],
+    "_delegatedGrants": [],
+    "_appPermissions": [
+      {
+        "appRoleId": "19dbc75e-c2e2-444c-a770-ec69d8559fc7",
+        "resourceDisplayName": "Microsoft Graph",
+        "principalDisplayName": "High Privilege Stale App"
+      }
+    ],
+    "_signInActivity": {
+      "appId": "bbbbbbbb-0004-0004-0004-bbbbbbbbbbbb",
+      "lastSignInActivity": { "lastSignInDateTime": "2024-06-01T00:00:00Z" }
+    },
+    "_disabledOwnerIds": []
+  },
+  {
+    "id": "aaaaaaaa-0005-0005-0005-aaaaaaaaaaaa",
+    "appId": "bbbbbbbb-0005-0005-0005-bbbbbbbbbbbb",
+    "displayName": "Never Signed In App",
+    "accountEnabled": true,
+    "servicePrincipalType": "Application",
+    "tags": [],
+    "createdDateTime": "2023-11-01T10:00:00Z",
+    "passwordCredentials": [],
+    "keyCredentials": [],
+    "_assignments": [],
+    "_owners": [{"id": "user-3", "displayName": "Carol Davis", "accountEnabled": false}],
+    "_delegatedGrants": [],
+    "_appPermissions": [],
+    "_signInActivity": {
+      "appId": "bbbbbbbb-0005-0005-0005-bbbbbbbbbbbb",
+      "lastSignInActivity": {}
+    },
+    "_disabledOwnerIds": ["user-3"]
+  },
+  {
+    "id": "aaaaaaaa-0006-0006-0006-aaaaaaaaaaaa",
+    "appId": "bbbbbbbb-0006-0006-0006-bbbbbbbbbbbb",
+    "displayName": "Disabled SP Not Deleted",
+    "accountEnabled": false,
+    "servicePrincipalType": "Application",
+    "tags": [],
+    "createdDateTime": "2021-05-01T10:00:00Z",
+    "passwordCredentials": [],
+    "keyCredentials": [],
+    "_assignments": [],
+    "_owners": [],
+    "_delegatedGrants": [],
+    "_appPermissions": [],
+    "_signInActivity": {},
+    "_disabledOwnerIds": []
+  }
+]
