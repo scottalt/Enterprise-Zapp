@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Enterprise-Zapp one-time setup script.
     Creates a temporary, read-only app registration in your Entra ID tenant
@@ -36,13 +36,15 @@ $ErrorActionPreference = "Stop"
 $ConfigFile = Join-Path $PSScriptRoot "enterprise_zapp_config.json"
 $AppName = "Enterprise-Zapp-Scan-$(Get-Date -Format 'yyyy-MM-dd')"
 
-# ── Required read-only delegated permissions (Graph API) ─────────────────────
+# ── Required application permissions / app roles (Graph API) ─────────────────
+# IDs must be the appRole (application permission) GUIDs from the Microsoft
+# Graph service principal, NOT the oauth2PermissionScope (delegated) GUIDs.
 $RequiredPermissions = @(
-    @{ Api = "00000003-0000-0000-c000-000000000000"; Permission = "Application.Read.All";  Id = "c79f8feb-a9db-4090-85f9-90d820caa0eb" },
+    @{ Api = "00000003-0000-0000-c000-000000000000"; Permission = "Application.Read.All";  Id = "9a5d68dd-52b0-4cc2-bd40-abcf44ac3a30" },
     @{ Api = "00000003-0000-0000-c000-000000000000"; Permission = "Directory.Read.All";    Id = "7ab1d382-f21e-4acd-a863-ba3e13f7da61" },
     @{ Api = "00000003-0000-0000-c000-000000000000"; Permission = "AuditLog.Read.All";     Id = "b0afded3-3588-46d8-8b3d-9842eff778da" },
     @{ Api = "00000003-0000-0000-c000-000000000000"; Permission = "Reports.Read.All";      Id = "230c1aed-a721-4c5d-9cb4-a90514e508ef" },
-    @{ Api = "00000003-0000-0000-c000-000000000000"; Permission = "Policy.Read.All";       Id = "572fea84-0151-49b2-9301-11cb16974376" }
+    @{ Api = "00000003-0000-0000-c000-000000000000"; Permission = "Policy.Read.All";       Id = "246dd0d5-5bd0-4def-940b-0421030a5b68" }
 )
 
 function Write-Banner {
@@ -70,6 +72,35 @@ function Install-GraphModule {
     Import-Module Microsoft.Graph.Identity.DirectoryManagement -ErrorAction SilentlyContinue
 }
 
+function Assert-EntraIDAccount {
+    $ctx = Get-MgContext
+    if (-not $ctx) {
+        Write-Host "[!] Not connected to Microsoft Graph." -ForegroundColor Red
+        exit 1
+    }
+
+    # The well-known MSA consumer tenant ID
+    $ConsumerTenantId = "9188040d-6c67-4c5b-b112-36a304b66dad"
+
+    if ($ctx.TenantId -eq $ConsumerTenantId) {
+        Write-Host "" -ForegroundColor Red
+        Write-Host "  [!] ERROR: Personal Microsoft Account (MSA) detected." -ForegroundColor Red
+        Write-Host ""
+        Write-Host "  Enterprise-Zapp requires an Entra ID work or school account." -ForegroundColor Yellow
+        Write-Host "  You are signed in as: $($ctx.Account)" -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "  Please re-run the script and sign in with your organization's" -ForegroundColor White
+        Write-Host "  Entra ID credentials (e.g., user@yourcompany.com)." -ForegroundColor White
+        Write-Host ""
+        Write-Host "  TIP: If your personal account keeps being selected automatically," -ForegroundColor Gray
+        Write-Host "  try signing out of that account from the browser first, or run:" -ForegroundColor Gray
+        Write-Host "    Connect-MgGraph -UseDeviceAuthentication" -ForegroundColor Gray
+        Write-Host ""
+        Disconnect-MgGraph | Out-Null
+        exit 1
+    }
+}
+
 function Remove-ExistingApp {
     if (-not (Test-Path $ConfigFile)) {
         Write-Host "[!] No config file found at $ConfigFile. Nothing to clean up." -ForegroundColor Yellow
@@ -80,7 +111,12 @@ function Remove-ExistingApp {
     $ClientId = $Config.client_id
 
     Write-Host "[*] Connecting to Microsoft Graph for cleanup..." -ForegroundColor Cyan
+
+    # Disconnect any cached session so a fresh sign-in prompt always appears
+    Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null
+
     Connect-MgGraph -Scopes "Application.ReadWrite.All" -NoWelcome
+    Assert-EntraIDAccount
 
     $App = Get-MgApplication -Filter "appId eq '$ClientId'" -ErrorAction SilentlyContinue
     if ($App) {
@@ -99,12 +135,23 @@ function New-AppRegistration {
     Write-Host "    You will be prompted to sign in as a Global Admin or Privileged Role Admin." -ForegroundColor Gray
     Write-Host ""
 
-    Connect-MgGraph -Scopes "Application.ReadWrite.All", "AppRoleAssignment.ReadWrite.All", "DelegatedPermissionGrant.ReadWrite.All" -NoWelcome
+    # Disconnect any cached session so a fresh sign-in prompt always appears
+    Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null
+
+    Connect-MgGraph -Scopes "Application.ReadWrite.All", "AppRoleAssignment.ReadWrite.All", "DelegatedPermissionGrant.ReadWrite.All", "Organization.Read.All" -NoWelcome
+    Assert-EntraIDAccount
 
     # Get tenant info
-    $TenantDetails = Get-MgOrganization
-    $TenantId = $TenantDetails.Id
-    $TenantName = $TenantDetails.DisplayName
+    try {
+        $TenantDetails = Get-MgOrganization
+        $TenantId = $TenantDetails.Id
+        $TenantName = $TenantDetails.DisplayName
+    } catch {
+        Write-Host "[!] Could not retrieve tenant details. Falling back to context info." -ForegroundColor Yellow
+        $ctx = Get-MgContext
+        $TenantId = $ctx.TenantId
+        $TenantName = "(unknown)"
+    }
     Write-Host "[+] Connected to tenant: $TenantName ($TenantId)" -ForegroundColor Green
 
     # Check if an app with today's name already exists
@@ -124,9 +171,10 @@ function New-AppRegistration {
         }
 
         $AppParams = @{
-            DisplayName            = $AppName
-            SignInAudience         = "AzureADMyOrg"
-            RequiredResourceAccess = @(
+            DisplayName              = $AppName
+            SignInAudience           = "AzureADMyOrg"
+            IsFallbackPublicClient   = $true   # required for MSAL device code flow
+            RequiredResourceAccess   = @(
                 @{
                     ResourceAppId  = "00000003-0000-0000-c000-000000000000"
                     ResourceAccess = $GraphResourceAccess
@@ -136,6 +184,12 @@ function New-AppRegistration {
 
         $App = New-MgApplication @AppParams
         Write-Host "[+] App registration created. App ID: $($App.AppId)" -ForegroundColor Green
+    }
+
+    # Ensure public client flows are enabled (covers apps created before this fix)
+    if (-not $App.IsFallbackPublicClient) {
+        Update-MgApplication -ApplicationId $App.Id -IsFallbackPublicClient:$true
+        Write-Host "[+] Enabled public client flows on app registration." -ForegroundColor Green
     }
 
     # Grant admin consent via service principal
@@ -176,7 +230,9 @@ function New-AppRegistration {
         app_name    = $AppName
         created_at  = (Get-Date -Format "o")
     }
-    $Config | ConvertTo-Json | Set-Content $ConfigFile -Encoding UTF8
+    # Write UTF-8 without BOM so Python can read it with standard utf-8 encoding
+    $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+    [System.IO.File]::WriteAllText($ConfigFile, ($Config | ConvertTo-Json), $utf8NoBom)
 
     Write-Host ""
     Write-Host "  ════════════════════════════════════════════════" -ForegroundColor Cyan
