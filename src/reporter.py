@@ -104,6 +104,7 @@ def generate_html(
     raw_data: dict,
     stale_days: int,
     output_path: Path,
+    hide_microsoft: bool = False,
 ) -> Path:
     """Render the HTML report and write to output_path."""
     env = _build_jinja_env()
@@ -114,6 +115,14 @@ def generate_html(
         raise
 
     tenant = raw_data.get("tenant", {})
+
+    # Count Microsoft first-party apps before any filtering
+    microsoft_app_count = sum(1 for r in results if r.is_microsoft_first_party)
+
+    # Optionally filter out Microsoft first-party apps for all downstream lists
+    if hide_microsoft:
+        results = [r for r in results if not r.is_microsoft_first_party]
+
     bands = band_counts(results)
 
     critical_high = [r for r in results if r.risk_band in ("critical", "high")]
@@ -125,6 +134,7 @@ def generate_html(
     credential_apps = [r for r in results if r.has_expired_secret or r.has_expired_cert or r.has_near_expiry_secret or r.has_near_expiry_cert]
     orphaned_apps = [r for r in results if r.owner_count == 0 or any(s.key == "disabled_owner" for s in r.signals)]
     high_privilege_apps = [r for r in results if r.has_high_privilege and any(s.key in ("stale", "never_signed_in") for s in r.signals)]
+    tool_artifact_apps = [r for r in results if r.is_tool_artifact]
 
     collected_at_raw = raw_data.get("collected_at", "")
     try:
@@ -149,6 +159,9 @@ def generate_html(
         all_apps=results,
         skipped=raw_data.get("skipped", []),
         stale_days=stale_days,
+        hide_microsoft=hide_microsoft,
+        microsoft_app_count=microsoft_app_count,
+        tool_artifact_apps=tool_artifact_apps,
     )
 
     output_path.write_text(html_content, encoding="utf-8")
@@ -178,6 +191,8 @@ def generate_csv(results: list[AppResult], output_path: Path) -> Path:
         "has_near_expiry_secret",
         "has_near_expiry_cert",
         "has_high_privilege",
+        "is_microsoft_first_party",
+        "is_tool_artifact",
         "signal_keys",
         "signal_count",
         "primary_recommendation",
@@ -206,6 +221,8 @@ def generate_csv(results: list[AppResult], output_path: Path) -> Path:
                     "has_near_expiry_secret": r.has_near_expiry_secret,
                     "has_near_expiry_cert": r.has_near_expiry_cert,
                     "has_high_privilege": r.has_high_privilege,
+                    "is_microsoft_first_party": r.is_microsoft_first_party,
+                    "is_tool_artifact": r.is_tool_artifact,
                     "signal_keys": "|".join(s.key for s in r.signals),
                     "signal_count": len(r.signals),
                     "primary_recommendation": r.primary_recommendation,
@@ -242,6 +259,7 @@ def generate_all(
     raw_data: dict,
     stale_days: int,
     output_dir: Path,
+    hide_microsoft: bool = False,
 ) -> dict[str, Path | None]:
     """Generate HTML, CSV, and PDF reports. Returns dict of format → output path."""
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -256,7 +274,7 @@ def generate_all(
     pdf_path = Path(str(base) + ".pdf")
 
     console.print("[cyan]Generating HTML report...[/cyan]")
-    html_out = generate_html(results, raw_data, stale_days, html_path)
+    html_out = generate_html(results, raw_data, stale_days, html_path, hide_microsoft=hide_microsoft)
     console.print(f"[green]HTML:[/green] {html_out}")
 
     console.print("[cyan]Generating CSV export...[/cyan]")

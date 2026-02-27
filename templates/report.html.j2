@@ -197,6 +197,34 @@
   }
   .notice strong { color: #fbbf24; }
 
+  /* ── Callout banners ─────────────────────────────────────────────────── */
+  .callout {
+    border-radius: 8px; padding: 14px 18px; font-size: 13px; margin-bottom: 20px;
+    display: flex; align-items: flex-start; gap: 12px;
+  }
+  .callout-icon { font-size: 18px; line-height: 1.4; flex-shrink: 0; }
+  .callout-body { flex: 1; }
+  .callout-body strong { display: block; margin-bottom: 4px; font-size: 14px; }
+  .callout-info {
+    background: rgba(56,189,248,0.07); border: 1px solid rgba(56,189,248,0.25); color: #7dd3fc;
+  }
+  .callout-info strong { color: var(--accent); }
+  .callout-muted {
+    background: rgba(129,140,248,0.07); border: 1px solid rgba(129,140,248,0.2); color: #a5b4fc;
+  }
+  .callout-muted strong { color: var(--brand); }
+  .callout-warning {
+    background: rgba(234,179,8,0.08); border: 1px solid rgba(234,179,8,0.3); color: #fde047;
+  }
+  .callout-warning strong { color: #fbbf24; }
+  .callout-artifact-list {
+    list-style: none; margin-top: 8px;
+  }
+  .callout-artifact-list li {
+    padding: 3px 0; font-family: monospace; font-size: 12px;
+  }
+  .callout-artifact-list li::before { content: '• '; color: #fbbf24; }
+
   /* ── Print styles ────────────────────────────────────────────────────── */
   @media print {
     body { background: white; color: black; }
@@ -276,6 +304,45 @@
         <div class="label">Clean</div>
       </div>
     </div>
+
+    <!-- ── Tool artifact cleanup reminder ───────────────────────────────── -->
+    {% if tool_artifact_apps %}
+    <div class="callout callout-warning">
+      <div class="callout-icon">&#9888;</div>
+      <div class="callout-body">
+        <strong>Cleanup Reminder — Enterprise-Zapp Scan App(s)</strong>
+        Enterprise-Zapp created the following app registration(s) during setup. Please delete them
+        after your audit to avoid leaving unused app registrations with active credentials in your tenant.
+        Run: <code>.\setup.ps1 -Cleanup</code>
+        <ul class="callout-artifact-list">
+          {% for app in tool_artifact_apps %}
+          <li>{{ app.display_name }} <span style="opacity:0.6;">({{ app.app_id }})</span></li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- ── Microsoft first-party apps banner ────────────────────────────── -->
+    {% if hide_microsoft and microsoft_app_count > 0 %}
+    <div class="callout callout-muted">
+      <div class="callout-icon">&#8505;</div>
+      <div class="callout-body">
+        <strong>{{ microsoft_app_count }} Microsoft first-party app{{ 's' if microsoft_app_count != 1 else '' }} excluded from this report</strong>
+        These are built-in Microsoft services (Teams, SharePoint, Azure AD, etc.) and are expected in your tenant.
+        To include them, re-run without the <code>--hide-microsoft</code> flag.
+      </div>
+    </div>
+    {% elif not hide_microsoft and microsoft_app_count > 0 %}
+    <div class="callout callout-info">
+      <div class="callout-icon">&#8505;</div>
+      <div class="callout-body">
+        <strong>This report includes {{ microsoft_app_count }} Microsoft first-party app{{ 's' if microsoft_app_count != 1 else '' }}</strong>
+        These are built-in Microsoft services (Teams, SharePoint, etc.) and are expected in your tenant.
+        Use <code>--hide-microsoft</code> to exclude them from the report.
+      </div>
+    </div>
+    {% endif %}
 
     <!-- Top recommendations -->
     <div class="section-title" style="margin-top: 32px; font-size: 15px;">Top Recommended Actions</div>

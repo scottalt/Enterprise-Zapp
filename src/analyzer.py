@@ -20,6 +20,9 @@ DEFAULT_STALE_DAYS = 90
 NEAR_EXPIRY_DAYS = 30
 NEAR_EXPIRY_WARN_DAYS = 90
 
+# Microsoft's well-known tenant ID — used to identify Microsoft first-party apps
+MICROSOFT_TENANT_ID = "f8cdef31-a31e-4b4a-93e4-5f571e91255a"
+
 # Application permission IDs that are considered high-privilege
 # (Microsoft Graph well-known role IDs)
 HIGH_PRIVILEGE_ROLE_IDS: set[str] = {
@@ -70,6 +73,10 @@ class AppResult:
     risk_band: str          # "critical" | "high" | "medium" | "low" | "clean"
     primary_recommendation: str
     tags: list[str]
+
+    # Classification flags
+    is_microsoft_first_party: bool = False
+    is_tool_artifact: bool = False
 
     # Raw data for report drill-down
     owners: list[dict] = field(default_factory=list)
@@ -174,6 +181,12 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
     account_enabled = sp.get("accountEnabled", True)
     sp_type = sp.get("servicePrincipalType", "")
     created_dt = _parse_dt(sp.get("createdDateTime"))
+
+    # ── Classification flags ───────────────────────────────────────────────
+    is_microsoft_first_party = (
+        sp.get("appOwnerOrganizationId") == MICROSOFT_TENANT_ID
+    )
+    is_tool_artifact = display_name.startswith("Enterprise-Zapp-Scan-")
 
     owners: list[dict] = sp.get("_owners", [])
     assignments: list[dict] = sp.get("_assignments", [])
@@ -356,6 +369,20 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
         ))
         score += 25
 
+    # ── Signal: tool artifact ─────────────────────────────────────────────
+    if is_tool_artifact:
+        signals.append(Signal(
+            key="tool_artifact",
+            severity="info",
+            title="Enterprise-Zapp scan app",
+            detail=(
+                "This app was created by Enterprise-Zapp's setup.ps1 script. "
+                "Remember to delete it after your audit is complete to avoid "
+                "leaving unused credentials in your tenant."
+            ),
+            score_contribution=0,
+        ))
+
     # Cap score at 100
     score = min(score, 100)
 
@@ -380,6 +407,8 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
         risk_band=_risk_band(score),
         primary_recommendation=_primary_recommendation(signals, account_enabled),
         tags=sp.get("tags", []),
+        is_microsoft_first_party=is_microsoft_first_party,
+        is_tool_artifact=is_tool_artifact,
         owners=owners,
         password_credentials=password_creds,
         key_credentials=key_creds,
