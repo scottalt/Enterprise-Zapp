@@ -36,13 +36,15 @@ $ErrorActionPreference = "Stop"
 $ConfigFile = Join-Path $PSScriptRoot "enterprise_zapp_config.json"
 $AppName = "Enterprise-Zapp-Scan-$(Get-Date -Format 'yyyy-MM-dd')"
 
-# ── Required read-only delegated permissions (Graph API) ─────────────────────
+# ── Required application permissions / app roles (Graph API) ─────────────────
+# IDs must be the appRole (application permission) GUIDs from the Microsoft
+# Graph service principal, NOT the oauth2PermissionScope (delegated) GUIDs.
 $RequiredPermissions = @(
-    @{ Api = "00000003-0000-0000-c000-000000000000"; Permission = "Application.Read.All";  Id = "c79f8feb-a9db-4090-85f9-90d820caa0eb" },
+    @{ Api = "00000003-0000-0000-c000-000000000000"; Permission = "Application.Read.All";  Id = "9a5d68dd-52b0-4cc2-bd40-abcf44ac3a30" },
     @{ Api = "00000003-0000-0000-c000-000000000000"; Permission = "Directory.Read.All";    Id = "7ab1d382-f21e-4acd-a863-ba3e13f7da61" },
     @{ Api = "00000003-0000-0000-c000-000000000000"; Permission = "AuditLog.Read.All";     Id = "b0afded3-3588-46d8-8b3d-9842eff778da" },
     @{ Api = "00000003-0000-0000-c000-000000000000"; Permission = "Reports.Read.All";      Id = "230c1aed-a721-4c5d-9cb4-a90514e508ef" },
-    @{ Api = "00000003-0000-0000-c000-000000000000"; Permission = "Policy.Read.All";       Id = "572fea84-0151-49b2-9301-11cb16974376" }
+    @{ Api = "00000003-0000-0000-c000-000000000000"; Permission = "Policy.Read.All";       Id = "246dd0d5-5bd0-4def-940b-0421030a5b68" }
 )
 
 function Write-Banner {
@@ -136,7 +138,7 @@ function New-AppRegistration {
     # Disconnect any cached session so a fresh sign-in prompt always appears
     Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null
 
-    Connect-MgGraph -Scopes "Application.ReadWrite.All", "AppRoleAssignment.ReadWrite.All", "DelegatedPermissionGrant.ReadWrite.All" -NoWelcome
+    Connect-MgGraph -Scopes "Application.ReadWrite.All", "AppRoleAssignment.ReadWrite.All", "DelegatedPermissionGrant.ReadWrite.All", "Organization.Read.All" -NoWelcome
     Assert-EntraIDAccount
 
     # Get tenant info
