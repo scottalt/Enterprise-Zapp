@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Enterprise-Zapp Report — {{ tenant_name }}</title>
+<style>
+  /* ── Reset & Base ────────────────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg:       #0f1117;
+    --surface:  #1a1d27;
+    --surface2: #222534;
+    --border:   #2e3347;
+    --text:     #e2e8f0;
+    --muted:    #8892a4;
+    --accent:   #38bdf8;
+    --critical: #ef4444;
+    --high:     #f97316;
+    --medium:   #eab308;
+    --low:      #22c55e;
+    --clean:    #10b981;
+    --brand:    #818cf8;
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* ── Layout ──────────────────────────────────────────────────────────── */
+  .container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+  .section { margin-bottom: 40px; }
+
+  /* ── Header ──────────────────────────────────────────────────────────── */
+  .header {
+    background: linear-gradient(135deg, #1a1d27 0%, #0f1117 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 32px 0 24px;
+    margin-bottom: 40px;
+  }
+  .header-inner { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand-logo {
+    font-size: 28px; font-weight: 800; letter-spacing: -1px;
+    background: linear-gradient(135deg, var(--brand), var(--accent));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+  }
+  .brand-tagline { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .header-meta { text-align: right; font-size: 13px; color: var(--muted); }
+  .header-meta strong { color: var(--text); }
+  .readonly-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.3);
+    color: var(--clean); border-radius: 20px; padding: 3px 12px; font-size: 12px; font-weight: 600;
+    margin-top: 8px;
+  }
+
+  /* ── Section headings ────────────────────────────────────────────────── */
+  .section-title {
+    font-size: 18px; font-weight: 700; color: var(--text);
+    border-left: 3px solid var(--brand); padding-left: 12px;
+    margin-bottom: 16px;
+  }
+  .section-subtitle { color: var(--muted); font-size: 13px; margin-top: 4px; }
+
+  /* ── Summary cards ───────────────────────────────────────────────────── */
+  .summary-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px;
+    margin-bottom: 32px;
+  }
+  .summary-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 20px; text-align: center; position: relative; overflow: hidden;
+  }
+  .summary-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: var(--card-color, var(--brand));
+  }
+  .summary-card .count { font-size: 36px; font-weight: 800; color: var(--card-color, var(--text)); line-height: 1; }
+  .summary-card .label { font-size: 12px; color: var(--muted); margin-top: 6px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .card-critical { --card-color: var(--critical); }
+  .card-high     { --card-color: var(--high); }
+  .card-medium   { --card-color: var(--medium); }
+  .card-low      { --card-color: var(--low); }
+  .card-clean    { --card-color: var(--clean); }
+  .card-total    { --card-color: var(--brand); }
+
+  /* ── Risk badges ─────────────────────────────────────────────────────── */
+  .badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    border-radius: 20px; padding: 2px 10px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .badge-critical { background: rgba(239,68,68,0.15); color: var(--critical); border: 1px solid rgba(239,68,68,0.3); }
+  .badge-high     { background: rgba(249,115,22,0.15); color: var(--high);     border: 1px solid rgba(249,115,22,0.3); }
+  .badge-medium   { background: rgba(234,179,8,0.15);  color: var(--medium);   border: 1px solid rgba(234,179,8,0.3); }
+  .badge-low      { background: rgba(34,197,94,0.15);  color: var(--low);      border: 1px solid rgba(34,197,94,0.3); }
+  .badge-clean    { background: rgba(16,185,129,0.15); color: var(--clean);    border: 1px solid rgba(16,185,129,0.3); }
+
+  /* ── Score bar ───────────────────────────────────────────────────────── */
+  .score-bar-wrap { display: flex; align-items: center; gap: 8px; }
+  .score-bar { height: 6px; border-radius: 3px; background: var(--border); flex: 1; overflow: hidden; }
+  .score-bar-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
+  .score-num { font-size: 12px; font-weight: 700; min-width: 28px; text-align: right; }
+
+  /* ── Tables ──────────────────────────────────────────────────────────── */
+  .table-wrap { overflow-x: auto; border-radius: 12px; border: 1px solid var(--border); }
+  table { width: 100%; border-collapse: collapse; }
+  thead th {
+    background: var(--surface2); color: var(--muted);
+    font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+    padding: 10px 14px; text-align: left; position: sticky; top: 0;
+    cursor: pointer; user-select: none; white-space: nowrap;
+  }
+  thead th:hover { color: var(--text); }
+  thead th::after { content: ' ⇅'; opacity: 0.4; }
+  thead th.asc::after  { content: ' ↑'; opacity: 1; }
+  thead th.desc::after { content: ' ↓'; opacity: 1; }
+  tbody tr { border-top: 1px solid var(--border); transition: background 0.1s; }
+  tbody tr:hover { background: var(--surface2); }
+  tbody td { padding: 10px 14px; font-size: 13px; vertical-align: middle; }
+  .app-name { font-weight: 600; color: var(--text); }
+  .app-id   { font-size: 11px; color: var(--muted); font-family: monospace; }
+
+  /* ── Expandable rows ─────────────────────────────────────────────────── */
+  .expand-row { display: none; background: var(--surface2); }
+  .expand-row.open { display: table-row; }
+  .expand-content { padding: 16px 14px; }
+  .expand-trigger { cursor: pointer; }
+  .expand-trigger::before { content: '▶ '; font-size: 10px; color: var(--muted); }
+  .expand-trigger.open::before { content: '▼ '; }
+
+  /* ── Signal chips ────────────────────────────────────────────────────── */
+  .signals { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .signal-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    border-radius: 6px; padding: 4px 10px; font-size: 11px; font-weight: 500;
+  }
+  .signal-critical { background: rgba(239,68,68,0.1);  color: #fca5a5; border: 1px solid rgba(239,68,68,0.2); }
+  .signal-high     { background: rgba(249,115,22,0.1); color: #fdba74; border: 1px solid rgba(249,115,22,0.2); }
+  .signal-medium   { background: rgba(234,179,8,0.1);  color: #fde047; border: 1px solid rgba(234,179,8,0.2); }
+  .signal-low      { background: rgba(34,197,94,0.1);  color: #86efac; border: 1px solid rgba(34,197,94,0.2); }
+
+  /* ── Recommendation box ──────────────────────────────────────────────── */
+  .rec-box {
+    background: rgba(56,189,248,0.05); border: 1px solid rgba(56,189,248,0.2);
+    border-radius: 8px; padding: 12px 14px; margin-top: 12px; font-size: 13px; color: #7dd3fc;
+  }
+  .rec-box strong { color: var(--accent); }
+
+  /* ── Search/filter bar ───────────────────────────────────────────────── */
+  .filter-bar { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+  .filter-bar input {
+    background: var(--surface); border: 1px solid var(--border); color: var(--text);
+    border-radius: 8px; padding: 8px 14px; font-size: 13px; width: 260px; outline: none;
+  }
+  .filter-bar input:focus { border-color: var(--accent); }
+  .filter-bar select {
+    background: var(--surface); border: 1px solid var(--border); color: var(--text);
+    border-radius: 8px; padding: 8px 14px; font-size: 13px; outline: none; cursor: pointer;
+  }
+
+  /* ── Top recommendations ─────────────────────────────────────────────── */
+  .rec-list { list-style: none; }
+  .rec-list li {
+    display: flex; align-items: flex-start; gap: 12px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px; margin-bottom: 10px;
+  }
+  .rec-num { font-size: 18px; font-weight: 800; color: var(--brand); min-width: 28px; }
+  .rec-text { font-size: 14px; color: var(--text); }
+  .rec-sub  { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  /* ── Methodology ─────────────────────────────────────────────────────── */
+  .methodology-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+  .method-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+  .method-card h4 { font-size: 13px; font-weight: 700; color: var(--accent); margin-bottom: 8px; }
+  .method-card p  { font-size: 12px; color: var(--muted); }
+  .perm-list { list-style: none; margin-top: 8px; }
+  .perm-list li { font-size: 12px; color: var(--muted); padding: 2px 0; }
+  .perm-list li::before { content: '• '; color: var(--clean); }
+
+  /* ── Footer ──────────────────────────────────────────────────────────── */
+  .footer {
+    border-top: 1px solid var(--border); padding: 24px 0; margin-top: 48px;
+    text-align: center; color: var(--muted); font-size: 12px;
+  }
+
+  /* ── Skipped notice ──────────────────────────────────────────────────── */
+  .notice {
+    background: rgba(234,179,8,0.08); border: 1px solid rgba(234,179,8,0.25);
+    border-radius: 8px; padding: 12px 16px; font-size: 13px; color: #fde047; margin-bottom: 24px;
+  }
+  .notice strong { color: #fbbf24; }
+
+  /* ── Print styles ────────────────────────────────────────────────────── */
+  @media print {
+    body { background: white; color: black; }
+    .header { background: white; border-bottom: 2px solid #e2e8f0; }
+    .brand-logo { -webkit-text-fill-color: #4f46e5; }
+    .surface, .surface2 { background: #f8fafc; }
+    .filter-bar { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── Header ────────────────────────────────────────────────────────────── -->
+<div class="header">
+  <div class="container">
+    <div class="header-inner">
+      <div class="brand">
+        <div>
+          <div class="brand-logo">Enterprise-Zapp</div>
+          <div class="brand-tagline">Entra ID Enterprise App Hygiene Scanner</div>
+        </div>
+      </div>
+      <div class="header-meta">
+        <div><strong>Tenant:</strong> {{ tenant_name }}</div>
+        <div><strong>Tenant ID:</strong> {{ tenant_id }}</div>
+        <div><strong>Scan date:</strong> {{ collected_at }}</div>
+        <div><strong>Tool version:</strong> {{ version }}</div>
+        <div><span class="readonly-badge">&#10003; Read-Only Scan — No changes made</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- ── Skipped data notice ────────────────────────────────────────────── -->
+  {% if skipped %}
+  <div class="notice">
+    <strong>Note:</strong> Some data could not be collected due to permission gaps.
+    {% if 'sign_in_activities' in skipped %}
+    Sign-in activity data was unavailable — staleness signals may be incomplete.
+    Ensure <code>Reports.Read.All</code> is granted and admin-consented.
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <!-- ── Executive Summary ──────────────────────────────────────────────── -->
+  <div class="section">
+    <div class="section-title">
+      Executive Summary
+      <div class="section-subtitle">{{ total_apps }} enterprise apps scanned</div>
+    </div>
+
+    <div class="summary-grid">
+      <div class="summary-card card-total">
+        <div class="count">{{ total_apps }}</div>
+        <div class="label">Total Apps</div>
+      </div>
+      <div class="summary-card card-critical">
+        <div class="count">{{ band_counts.critical }}</div>
+        <div class="label">Critical Risk</div>
+      </div>
+      <div class="summary-card card-high">
+        <div class="count">{{ band_counts.high }}</div>
+        <div class="label">High Risk</div>
+      </div>
+      <div class="summary-card card-medium">
+        <div class="count">{{ band_counts.medium }}</div>
+        <div class="label">Medium Risk</div>
+      </div>
+      <div class="summary-card card-low">
+        <div class="count">{{ band_counts.low }}</div>
+        <div class="label">Low Risk</div>
+      </div>
+      <div class="summary-card card-clean">
+        <div class="count">{{ band_counts.clean }}</div>
+        <div class="label">Clean</div>
+      </div>
+    </div>
+
+    <!-- Top recommendations -->
+    <div class="section-title" style="margin-top: 32px; font-size: 15px;">Top Recommended Actions</div>
+    <ul class="rec-list">
+      {% for rec in top_recommendations %}
+      <li>
+        <div class="rec-num">{{ loop.index }}</div>
+        <div>
+          <div class="rec-text">{{ rec.text }}</div>
+          <div class="rec-sub">{{ rec.sub }}</div>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+
+  <!-- ── Critical & High Risk Apps ─────────────────────────────────────── -->
+  {% if critical_high_apps %}
+  <div class="section">
+    <div class="section-title">
+      Critical &amp; High Risk Apps
+      <div class="section-subtitle">{{ critical_high_apps | length }} apps requiring immediate attention</div>
+    </div>
+    <div class="table-wrap">
+      <table id="tbl-critical">
+        <thead>
+          <tr>
+            <th>App Name</th>
+            <th>Risk Score</th>
+            <th>Risk Band</th>
+            <th>Last Sign-In</th>
+            <th>Owners</th>
+            <th>Assigned</th>
+            <th>Primary Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for app in critical_high_apps %}
+          <tr class="expand-trigger" onclick="toggleRow('crit-{{ loop.index }}', this)">
+            <td>
+              <div class="app-name">{{ app.display_name }}</div>
+              <div class="app-id">{{ app.app_id }}</div>
+            </td>
+            <td>
+              <div class="score-bar-wrap">
+                <div class="score-bar">
+                  <div class="score-bar-fill" style="width: {{ app.risk_score }}%; background: var(--{{ app.risk_band }})"></div>
+                </div>
+                <span class="score-num" style="color: var(--{{ app.risk_band }})">{{ app.risk_score }}</span>
+              </div>
+            </td>
+            <td><span class="badge badge-{{ app.risk_band }}">{{ app.risk_band }}</span></td>
+            <td>{{ app.last_sign_in | format_date if app.last_sign_in else '—' }}</td>
+            <td>{{ app.owner_count }}</td>
+            <td>{{ app.assignment_count }}</td>
+            <td style="font-size: 12px; color: var(--muted); max-width: 220px;">{{ app.primary_recommendation[:80] }}{% if app.primary_recommendation | length > 80 %}...{% endif %}</td>
+          </tr>
+          <tr class="expand-row" id="crit-{{ loop.index }}">
+            <td colspan="7">
+              <div class="expand-content">
+                <div class="signals">
+                  {% for sig in app.signals %}
+                  <span class="signal-chip signal-{{ sig.severity }}" title="{{ sig.detail }}">{{ sig.title }}</span>
+                  {% endfor %}
+                </div>
+                <div class="rec-box"><strong>Recommendation:</strong> {{ app.primary_recommendation }}</div>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- ── Stale Apps ─────────────────────────────────────────────────────── -->
+  {% if stale_apps %}
+  <div class="section">
+    <div class="section-title">
+      Stale Apps
+      <div class="section-subtitle">{{ stale_apps | length }} apps with no recent sign-in activity</div>
+    </div>
+    <div class="table-wrap">
+      <table id="tbl-stale">
+        <thead>
+          <tr>
+            <th>App Name</th>
+            <th>Last Sign-In</th>
+            <th>Days Since Sign-In</th>
+            <th>Owners</th>
+            <th>Assignments</th>
+            <th>Risk</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for app in stale_apps %}
+          <tr>
+            <td>
+              <div class="app-name">{{ app.display_name }}</div>
+              <div class="app-id">{{ app.app_id }}</div>
+            </td>
+            <td>{{ app.last_sign_in | format_date if app.last_sign_in else 'Never' }}</td>
+            <td>{% if app.days_since_sign_in is not none %}{{ app.days_since_sign_in }}d{% else %}—{% endif %}</td>
+            <td>{{ app.owner_count }}</td>
+            <td>{{ app.assignment_count }}</td>
+            <td><span class="badge badge-{{ app.risk_band }}">{{ app.risk_band }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- ── Credential Issues ──────────────────────────────────────────────── -->
+  {% if credential_apps %}
+  <div class="section">
+    <div class="section-title">
+      Credential Issues
+      <div class="section-subtitle">{{ credential_apps | length }} apps with expired or near-expiry secrets/certificates</div>
+    </div>
+    <div class="table-wrap">
+      <table id="tbl-creds">
+        <thead>
+          <tr>
+            <th>App Name</th>
+            <th>Expired Secret</th>
+            <th>Expired Cert</th>
+            <th>Near-Expiry Secret</th>
+            <th>Near-Expiry Cert</th>
+            <th>Risk</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for app in credential_apps %}
+          <tr>
+            <td>
+              <div class="app-name">{{ app.display_name }}</div>
+              <div class="app-id">{{ app.app_id }}</div>
+            </td>
+            <td>{% if app.has_expired_secret %}<span class="badge badge-critical">Yes</span>{% else %}—{% endif %}</td>
+            <td>{% if app.has_expired_cert %}<span class="badge badge-critical">Yes</span>{% else %}—{% endif %}</td>
+            <td>{% if app.has_near_expiry_secret %}<span class="badge badge-high">Yes</span>{% else %}—{% endif %}</td>
+            <td>{% if app.has_near_expiry_cert %}<span class="badge badge-high">Yes</span>{% else %}—{% endif %}</td>
+            <td><span class="badge badge-{{ app.risk_band }}">{{ app.risk_band }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- ── Orphaned Apps ──────────────────────────────────────────────────── -->
+  {% if orphaned_apps %}
+  <div class="section">
+    <div class="section-title">
+      Orphaned Apps
+      <div class="section-subtitle">{{ orphaned_apps | length }} apps with no valid owner</div>
+    </div>
+    <div class="table-wrap">
+      <table id="tbl-orphaned">
+        <thead>
+          <tr>
+            <th>App Name</th>
+            <th>Owners (total)</th>
+            <th>Disabled Owners</th>
+            <th>Last Sign-In</th>
+            <th>Risk</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for app in orphaned_apps %}
+          <tr>
+            <td>
+              <div class="app-name">{{ app.display_name }}</div>
+              <div class="app-id">{{ app.app_id }}</div>
+            </td>
+            <td>{{ app.owner_count }}</td>
+            <td>{{ app.owners | selectattr('id', 'in', app.owners | map(attribute='id') | list) | list | length }}</td>
+            <td>{{ app.last_sign_in | format_date if app.last_sign_in else '—' }}</td>
+            <td><span class="badge badge-{{ app.risk_band }}">{{ app.risk_band }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- ── Over-Privileged Apps ───────────────────────────────────────────── -->
+  {% if high_privilege_apps %}
+  <div class="section">
+    <div class="section-title">
+      Over-Privileged Apps
+      <div class="section-subtitle">{{ high_privilege_apps | length }} apps with high-privilege permissions and limited or no activity</div>
+    </div>
+    <div class="table-wrap">
+      <table id="tbl-priv">
+        <thead>
+          <tr>
+            <th>App Name</th>
+            <th>Last Sign-In</th>
+            <th>High-Privilege Permissions</th>
+            <th>Risk</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for app in high_privilege_apps %}
+          <tr>
+            <td>
+              <div class="app-name">{{ app.display_name }}</div>
+              <div class="app-id">{{ app.app_id }}</div>
+            </td>
+            <td>{{ app.last_sign_in | format_date if app.last_sign_in else '—' }}</td>
+            <td><span class="badge badge-critical">Yes</span></td>
+            <td><span class="badge badge-{{ app.risk_band }}">{{ app.risk_band }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- ── Full Inventory ─────────────────────────────────────────────────── -->
+  <div class="section">
+    <div class="section-title">
+      Full App Inventory
+      <div class="section-subtitle">All {{ total_apps }} enterprise apps — sortable and filterable</div>
+    </div>
+    <div class="filter-bar">
+      <input type="text" id="inv-search" placeholder="Search by name or app ID..." oninput="filterTable()">
+      <select id="inv-band" onchange="filterTable()">
+        <option value="">All risk bands</option>
+        <option value="critical">Critical</option>
+        <option value="high">High</option>
+        <option value="medium">Medium</option>
+        <option value="low">Low</option>
+        <option value="clean">Clean</option>
+      </select>
+    </div>
+    <div class="table-wrap">
+      <table id="tbl-inventory">
+        <thead>
+          <tr>
+            <th onclick="sortTable('tbl-inventory', 0)">App Name</th>
+            <th onclick="sortTable('tbl-inventory', 1)">Risk Score</th>
+            <th onclick="sortTable('tbl-inventory', 2)">Risk Band</th>
+            <th onclick="sortTable('tbl-inventory', 3)">Last Sign-In</th>
+            <th onclick="sortTable('tbl-inventory', 4)">Owners</th>
+            <th onclick="sortTable('tbl-inventory', 5)">Assigned</th>
+            <th onclick="sortTable('tbl-inventory', 6)">Enabled</th>
+            <th>Signals</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for app in all_apps %}
+          <tr data-band="{{ app.risk_band }}" data-name="{{ app.display_name | lower }}" data-appid="{{ app.app_id | lower }}">
+            <td>
+              <div class="app-name">{{ app.display_name }}</div>
+              <div class="app-id">{{ app.app_id }}</div>
+            </td>
+            <td data-val="{{ app.risk_score }}">
+              <div class="score-bar-wrap">
+                <div class="score-bar">
+                  <div class="score-bar-fill" style="width: {{ app.risk_score }}%; background: var(--{{ app.risk_band }})"></div>
+                </div>
+                <span class="score-num" style="color: var(--{{ app.risk_band }})">{{ app.risk_score }}</span>
+              </div>
+            </td>
+            <td data-val="{{ app.risk_band }}"><span class="badge badge-{{ app.risk_band }}">{{ app.risk_band }}</span></td>
+            <td data-val="{{ app.days_since_sign_in if app.days_since_sign_in is not none else 99999 }}">
+              {{ app.last_sign_in | format_date if app.last_sign_in else '—' }}
+            </td>
+            <td data-val="{{ app.owner_count }}">{{ app.owner_count }}</td>
+            <td data-val="{{ app.assignment_count }}">{{ app.assignment_count }}</td>
+            <td>{% if app.account_enabled %}<span style="color: var(--clean)">Yes</span>{% else %}<span style="color: var(--critical)">No</span>{% endif %}</td>
+            <td>
+              <div class="signals" style="gap: 4px;">
+                {% for sig in app.signals[:3] %}
+                <span class="signal-chip signal-{{ sig.severity }}" title="{{ sig.detail }}">{{ sig.key.replace('_', ' ') }}</span>
+                {% endfor %}
+                {% if app.signals | length > 3 %}
+                <span style="color: var(--muted); font-size: 11px;">+{{ app.signals | length - 3 }} more</span>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div id="inv-count" style="margin-top: 8px; font-size: 12px; color: var(--muted);"></div>
+  </div>
+
+  <!-- ── Methodology ────────────────────────────────────────────────────── -->
+  <div class="section">
+    <div class="section-title">Methodology &amp; Transparency</div>
+    <div class="methodology-grid">
+      <div class="method-card">
+        <h4>Data Collected</h4>
+        <ul class="perm-list">
+          <li>All service principals (enterprise apps)</li>
+          <li>User &amp; group assignments per app</li>
+          <li>App owners per app</li>
+          <li>OAuth2 delegated permission grants</li>
+          <li>Application permission assignments</li>
+          <li>Service principal sign-in activity</li>
+          <li>Disabled user list (for orphan detection)</li>
+        </ul>
+      </div>
+      <div class="method-card">
+        <h4>Permissions Used</h4>
+        <ul class="perm-list">
+          <li>Application.Read.All</li>
+          <li>Directory.Read.All</li>
+          <li>AuditLog.Read.All</li>
+          <li>Reports.Read.All</li>
+          <li>Policy.Read.All</li>
+        </ul>
+      </div>
+      <div class="method-card">
+        <h4>Risk Scoring</h4>
+        <p>Risk scores (0–100) combine weighted hygiene signals: staleness (+30), never signed in (+35), no owners (+20), expired credentials (+25), high-privilege + stale (+25), and more. Scores cap at 100.</p>
+      </div>
+      <div class="method-card">
+        <h4>Staleness Threshold</h4>
+        <p>Apps are flagged as stale if their last sign-in was more than <strong>{{ stale_days }} days</strong> ago. This threshold was used for this scan and can be adjusted with <code>--stale-days</code>.</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Footer ─────────────────────────────────────────────────────────────── -->
+<div class="footer">
+  <div class="container">
+    Generated by <strong>Enterprise-Zapp v{{ version }}</strong> &mdash;
+    Read-only scan. No changes were made to your Entra ID tenant. &mdash;
+    <a href="https://github.com/scottalt/Enterprise-Zapp">github.com/scottalt/Enterprise-Zapp</a>
+  </div>
+</div>
+
+<script>
+// ── Expandable rows ──────────────────────────────────────────────────────────
+function toggleRow(id, trigger) {
+  const row = document.getElementById(id);
+  if (!row) return;
+  const isOpen = row.classList.contains('open');
+  row.classList.toggle('open', !isOpen);
+  trigger.classList.toggle('open', !isOpen);
+}
+
+// ── Table sorting ────────────────────────────────────────────────────────────
+const sortState = {};
+function sortTable(tableId, colIndex) {
+  const table = document.getElementById(tableId);
+  const tbody = table.querySelector('tbody');
+  const ths = table.querySelectorAll('thead th');
+  const key = tableId + '-' + colIndex;
+  const asc = sortState[key] !== true;
+  sortState[key] = asc;
+
+  ths.forEach((th, i) => { th.classList.remove('asc', 'desc'); });
+  ths[colIndex].classList.add(asc ? 'asc' : 'desc');
+
+  const rows = Array.from(tbody.querySelectorAll('tr:not(.expand-row)'));
+  rows.sort((a, b) => {
+    const aCell = a.cells[colIndex];
+    const bCell = b.cells[colIndex];
+    const aVal = aCell?.dataset?.val ?? aCell?.textContent?.trim() ?? '';
+    const bVal = bCell?.dataset?.val ?? bCell?.textContent?.trim() ?? '';
+    const aNum = parseFloat(aVal);
+    const bNum = parseFloat(bVal);
+    if (!isNaN(aNum) && !isNaN(bNum)) return asc ? aNum - bNum : bNum - aNum;
+    return asc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+  });
+
+  rows.forEach(row => tbody.appendChild(row));
+}
+
+// ── Inventory filter ─────────────────────────────────────────────────────────
+function filterTable() {
+  const search = document.getElementById('inv-search').value.toLowerCase();
+  const band   = document.getElementById('inv-band').value.toLowerCase();
+  const rows   = document.querySelectorAll('#tbl-inventory tbody tr');
+  let visible  = 0;
+
+  rows.forEach(row => {
+    const name   = row.dataset.name   || '';
+    const appid  = row.dataset.appid  || '';
+    const rband  = row.dataset.band   || '';
+    const matchSearch = !search || name.includes(search) || appid.includes(search);
+    const matchBand   = !band   || rband === band;
+    const show = matchSearch && matchBand;
+    row.style.display = show ? '' : 'none';
+    if (show) visible++;
+  });
+
+  const counter = document.getElementById('inv-count');
+  counter.textContent = `Showing ${visible} of ${rows.length} apps`;
+}
+
+// Init counter
+filterTable();
+</script>
+</body>
+</html>

@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "enterprise-zapp"
+version = "0.1.0"
+description = "Read-only Entra ID enterprise app hygiene scanner — identify stale apps, expired credentials, orphaned registrations, and over-privileged service principals."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+keywords = [
+    "entra-id", "azure-ad", "security", "enterprise-apps",
+    "hygiene", "blue-team", "microsoft-graph", "devsecops"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Information Technology",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: System :: Systems Administration",
+]
+dependencies = [
+    "msal>=1.26.0",
+    "requests>=2.31.0",
+    "rich>=13.7.0",
+    "click>=8.1.7",
+    "jinja2>=3.1.3",
+    "pandas>=2.2.0",
+    "weasyprint>=61.0",
+]
+
+[project.scripts]
+enterprise-zapp = "src.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/scottalt/Enterprise-Zapp"
+Repository = "https://github.com/scottalt/Enterprise-Zapp"
+Issues = "https://github.com/scottalt/Enterprise-Zapp/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
