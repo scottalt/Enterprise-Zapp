@@ -173,10 +173,18 @@ def _risk_band(score: int) -> str:
 def _primary_recommendation(signals: list[Signal], account_enabled: bool) -> str:
     if not signals:
         return "No issues detected. Periodic review recommended."
-    # Most severe signal drives the recommendation
+
+    is_microsoft = any(s.key == "microsoft_first_party" for s in signals)
+    # For Microsoft apps, derive recommendation from security signals only;
+    # fall back to a Microsoft-specific message when no security issues exist.
+    active_signals = [s for s in signals if s.key != "microsoft_first_party"] if is_microsoft else signals
+    if not active_signals:
+        return "Microsoft first-party app — verify this service is still required in your tenant."
+
+    # Most severe non-marker signal drives the recommendation
     severity_order = ["critical", "high", "medium", "low", "info"]
     for sev in severity_order:
-        for sig in signals:
+        for sig in active_signals:
             if sig.severity == sev:
                 return _recommendation_for_signal(sig.key, account_enabled)
     return "Review flagged signals and remediate as appropriate."
@@ -204,6 +212,7 @@ def _recommendation_for_signal(key: str, account_enabled: bool) -> str:
         "implicit_grant_enabled": "Disable implicit grant flows in the app registration's Authentication blade. Migrate to authorization code flow with PKCE.",
         "multi_tenant_app": "Confirm this app must accept external tenant logins. If it only serves your organisation, restrict to 'Accounts in this organizational directory only' in the app registration manifest.",
         "mixed_credential_types": "This app has both client secrets and certificates. Remove any credentials that are no longer needed — each live credential is an independent attack vector.",
+        "microsoft_first_party": "Microsoft first-party app — verify this service is still required and review any security signals flagged above.",
     }
     return recs.get(key, "Review and remediate flagged issues.")
 
@@ -255,50 +264,62 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
     last_sign_in_dt = _parse_dt(last_sign_in_raw)
     days_since = _days_since(last_sign_in_dt)
 
-    if last_sign_in_dt is None and sign_in:
-        # Sign-in data available but app has never signed in
-        signals.append(Signal(
-            key="never_signed_in",
-            severity="high",
-            title="Never signed in",
-            detail="This app has sign-in activity tracking but has never authenticated.",
-            score_contribution=35,
-        ))
-        score += 35
-    elif days_since is not None and days_since > stale_days:
-        signals.append(Signal(
-            key="stale",
-            severity="high",
-            title=f"Stale — last sign-in {days_since} days ago",
-            detail=f"No sign-in activity detected in the past {stale_days} days (last seen: {last_sign_in_raw}).",
-            score_contribution=30,
-        ))
-        score += 30
+    # Microsoft first-party apps have unpredictable sign-in patterns and cannot
+    # be meaningfully flagged for staleness — skip these signals for them.
+    if not is_microsoft_first_party:
+        if last_sign_in_dt is None and sign_in:
+            # Sign-in data available but app has never signed in
+            signals.append(Signal(
+                key="never_signed_in",
+                severity="high",
+                title="Never signed in",
+                detail="This app has sign-in activity tracking but has never authenticated.",
+                score_contribution=35,
+            ))
+            score += 35
+        elif days_since is not None and days_since > stale_days:
+            signals.append(Signal(
+                key="stale",
+                severity="high",
+                title=f"Stale — last sign-in {days_since} days ago",
+                detail=f"No sign-in activity detected in the past {stale_days} days (last seen: {last_sign_in_raw}).",
+                score_contribution=30,
+            ))
+            score += 30
 
     # ── Signal: no owners ─────────────────────────────────────────────────
-    if len(owners) == 0:
-        signals.append(Signal(
-            key="no_owners",
-            severity="high",
-            title="No owners defined",
-            detail="This app has no assigned owners. There is no clear accountability for its lifecycle.",
-            score_contribution=20,
-        ))
-        score += 20
-    elif disabled_owner_ids:
-        signals.append(Signal(
-            key="disabled_owner",
-            severity="high",
-            title=f"Owner(s) are disabled accounts ({len(disabled_owner_ids)} of {len(owners)})",
-            detail="One or more app owners are disabled/deleted users — effectively orphaned.",
-            score_contribution=15,
-        ))
-        score += 15
+    # Microsoft first-party apps are managed by Microsoft and cannot have
+    # owners assigned by tenant admins — skip ownership signals for them.
+    if not is_microsoft_first_party:
+        if len(owners) == 0:
+            signals.append(Signal(
+                key="no_owners",
+                severity="high",
+                title="No owners defined",
+                detail="This app has no assigned owners. There is no clear accountability for its lifecycle.",
+                score_contribution=20,
+            ))
+            score += 20
+        elif disabled_owner_ids:
+            signals.append(Signal(
+                key="disabled_owner",
+                severity="high",
+                title=f"Owner(s) are disabled accounts ({len(disabled_owner_ids)} of {len(owners)})",
+                detail="One or more app owners are disabled/deleted users — effectively orphaned.",
+                score_contribution=15,
+            ))
+            score += 15
 
     # ── Signal: no assignments ────────────────────────────────────────────
-    # ManagedIdentity and SocialIdp principals should not have user assignments
+    # ManagedIdentity, SocialIdp, and Microsoft first-party apps should not
+    # have mandatory user assignments — skip this signal for them.
     _assignment_exempt_types = {"ManagedIdentity", "SocialIdp"}
-    if len(assignments) == 0 and account_enabled and sp_type not in _assignment_exempt_types:
+    if (
+        len(assignments) == 0
+        and account_enabled
+        and sp_type not in _assignment_exempt_types
+        and not is_microsoft_first_party
+    ):
         signals.append(Signal(
             key="no_assignments",
             severity="medium",
@@ -563,7 +584,8 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
         "AzureADMultipleOrgs",
         "AzureADandPersonalMicrosoftAccount",
     )
-    if is_multi_tenant:
+    # Microsoft first-party apps are inherently multi-tenant by design — skip.
+    if is_multi_tenant and not is_microsoft_first_party:
         # Escalate if the app also holds high-privilege app or delegated permissions
         if has_high_privilege or has_excessive_delegated:
             signals.append(Signal(
@@ -589,6 +611,20 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
                 score_contribution=10,
             ))
             score += 10
+
+    # ── Signal: Microsoft first-party app ────────────────────────────────
+    if is_microsoft_first_party:
+        signals.append(Signal(
+            key="microsoft_first_party",
+            severity="info",
+            title="Microsoft first-party app",
+            detail=(
+                "This app is published by Microsoft and was automatically provisioned in your "
+                "tenant. It cannot be deleted or fully customised by tenant admins. Review "
+                "whether the associated Microsoft service is still in use and correctly scoped."
+            ),
+            score_contribution=0,
+        ))
 
     # ── Signal: tool artifact ─────────────────────────────────────────────
     if is_tool_artifact:

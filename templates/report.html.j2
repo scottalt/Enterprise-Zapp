@@ -963,6 +963,15 @@ function toggleMicrosoft() {
     btn.textContent = 'Hide Microsoft Apps';
     btn.classList.remove('hiding');
   }
+
+  // Scroll the inventory section into view so the sticky column header
+  // doesn't clip the first visible row after rows are shown/hidden.
+  var section = document.getElementById('sec-inventory');
+  if (section) {
+    var navH = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--nav-height')) || 49;
+    var y = section.getBoundingClientRect().top + window.pageYOffset - navH - 4;
+    window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
+  }
 }
 
 // ── Inventory filter ─────────────────────────────────────────────────────────
@@ -972,6 +981,9 @@ function filterTable() {
   let visible  = 0;
 
   rows.forEach(function(row) {
+    // Expand rows follow their parent data row — skip independent evaluation.
+    if (row.classList.contains('expand-row')) return;
+
     const name      = row.dataset.name      || '';
     const appid     = row.dataset.appid     || '';
     const rband     = row.dataset.band      || '';
@@ -983,11 +995,20 @@ function filterTable() {
 
     const show = matchSearch && matchBand && matchMicrosoft;
     row.style.display = show ? '' : 'none';
+
+    // Co-hide the sibling expand row so an open expand row doesn't orphan.
+    var next = row.nextElementSibling;
+    if (next && next.classList.contains('expand-row') && !show) {
+      next.style.display = 'none';
+    } else if (next && next.classList.contains('expand-row') && show) {
+      next.style.display = '';  // revert to CSS (.expand-row default: none)
+    }
+
     if (show) visible++;
   });
 
   const counter = document.getElementById('inv-count');
-  const total   = document.querySelectorAll('#tbl-inventory tbody tr').length;
+  const total   = document.querySelectorAll('#tbl-inventory tbody tr:not(.expand-row)').length;
   counter.textContent = 'Showing ' + visible + ' of ' + total + ' apps';
 
   // Keep toggle button count in sync when other filters change while MS hidden
