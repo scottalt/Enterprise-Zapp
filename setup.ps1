@@ -6,10 +6,14 @@
 
 .DESCRIPTION
     This script:
-    1. Connects to Microsoft Graph (requires Global Admin or Privileged Role Admin)
+    1. Connects to Microsoft Graph (requires Privileged Role Administrator or Global Administrator)
     2. Creates an app registration named "Enterprise-Zapp-Scan-<date>"
     3. Grants read-only admin consent for the required API permissions
     4. Saves the client_id and tenant_id to enterprise_zapp_config.json
+
+    NOTE: Application Administrator and Cloud Application Administrator are NOT sufficient
+    for this script — those roles cannot grant admin consent for Microsoft Graph application
+    permissions. You must sign in as a Privileged Role Administrator or Global Administrator.
 
     The app registration can be deleted after the scan with: .\setup.ps1 -Cleanup
 
@@ -25,7 +29,7 @@
 
 .NOTES
     Required PowerShell module: Microsoft.Graph (installed automatically if missing)
-    Required role: Global Administrator or Privileged Role Administrator
+    Required role: Privileged Role Administrator (minimum) or Global Administrator
 #>
 
 param(
@@ -131,7 +135,7 @@ function Remove-ExistingApp {
 
 function New-AppRegistration {
     Write-Host "[*] Connecting to Microsoft Graph..." -ForegroundColor Cyan
-    Write-Host "    You will be prompted to sign in as a Global Admin or Privileged Role Admin." -ForegroundColor Gray
+    Write-Host "    You will be prompted to sign in as a Privileged Role Administrator or Global Administrator." -ForegroundColor Gray
     Write-Host ""
 
     # Disconnect any cached session so a fresh sign-in prompt always appears
