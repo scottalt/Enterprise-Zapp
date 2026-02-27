@@ -26,15 +26,21 @@ from .reporter import generate_all
 
 console = Console()
 
-BANNER = f"""
-[bold]
+BANNER = f"""[bold]
   ███████╗ ███╗  ██╗ ████████╗ ███████╗ ██████╗  ██████╗ ██╗ ███████╗ ███████╗
   ██╔════╝ ████╗ ██║ ╚══██╔══╝ ██╔════╝ ██╔══██╗ ██╔══██╗██║ ██╔════╝ ██╔════╝
   █████╗   ██╔██╗██║    ██║    █████╗   ██████╔╝ ██████╔╝██║ ███████╗ █████╗
   ██╔══╝   ██║╚████║    ██║    ██╔══╝   ██╔══██╗ ██╔═══╝ ██║ ╚════██║ ██╔══╝
   ███████╗ ██║ ╚███║    ██║    ███████╗ ██║  ██║ ██║     ██║ ███████║ ███████╗
   ╚══════╝ ╚═╝  ╚══╝    ╚═╝    ╚══════╝ ╚═╝  ╚═╝ ╚═╝     ╚═╝ ╚══════╝ ╚══════╝
-[/bold]
+[/bold][bold green]
+                     ███████╗  █████╗  ██████╗  ██████╗
+                     ╚════██║ ██╔══██╗ ██╔══██╗ ██╔══██╗
+                         ██╔╝ ███████║ ██████╔╝ ██████╔╝
+                        ██╔╝  ██╔══██║ ██╔═══╝  ██╔═══╝
+                     ███████╗ ██║  ██║ ██║      ██║
+                     ╚══════╝ ╚═╝  ╚═╝ ╚═╝      ╚═╝
+[/bold green]
 [dim]  Entra ID Enterprise App Hygiene Scanner  ·  v{__version__}[/dim]
 [bold green]  Read-Only. No changes will be made to your Entra ID tenant.[/bold green]
 [dim]  By Scott Altiparmak · https://www.linkedin.com/in/scottaltiparmak/[/dim]
@@ -89,6 +95,12 @@ BANNER = f"""
     default=False,
     help="Skip PDF generation (useful if weasyprint is not installed).",
 )
+@click.option(
+    "--hide-microsoft/--show-microsoft",
+    default=False,
+    show_default=True,
+    help="Exclude Microsoft first-party apps (Teams, SharePoint, etc.) from the report.",
+)
 @click.version_option(__version__, "--version", "-V")
 def main(
     tenant: str | None,
@@ -98,6 +110,7 @@ def main(
     output: Path,
     from_cache: Path | None,
     skip_pdf: bool,
+    hide_microsoft: bool,
 ) -> None:
     """
     Enterprise-Zapp — Entra ID Enterprise App Hygiene Scanner.
@@ -191,11 +204,11 @@ def main(
         slug = tenant_obj.get("displayName", "tenant").replace(" ", "_").lower()
         date_slug = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         base = output_dir / f"enterprise_zapp_{slug}_{date_slug}"
-        html_out = generate_html(results, raw_data, stale_days, Path(str(base) + ".html"))
+        html_out = generate_html(results, raw_data, stale_days, Path(str(base) + ".html"), hide_microsoft=hide_microsoft)
         csv_out = generate_csv(results, Path(str(base) + ".csv"))
         outputs = {"html": html_out, "csv": csv_out, "pdf": None}
     else:
-        outputs = generate_all(results, raw_data, stale_days, output_dir)
+        outputs = generate_all(results, raw_data, stale_days, output_dir, hide_microsoft=hide_microsoft)
 
     # ── Final summary ────────────────────────────────────────────────────────
     console.print(

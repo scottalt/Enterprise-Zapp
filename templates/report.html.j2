@@ -125,6 +125,7 @@
   tbody td { padding: 10px 14px; font-size: 13px; vertical-align: middle; }
   .app-name { font-weight: 600; color: var(--text); }
   .app-id   { font-size: 11px; color: var(--muted); font-family: monospace; }
+  .app-desc { font-size: 11px; color: var(--muted); margin-top: 3px; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-style: italic; }
 
   /* ── Expandable rows ─────────────────────────────────────────────────── */
   .expand-row { display: none; background: var(--surface2); }
@@ -164,6 +165,34 @@
     border-radius: 8px; padding: 8px 14px; font-size: 13px; outline: none; cursor: pointer;
   }
 
+  /* ── Risk band filter buttons ────────────────────────────────────────── */
+  .band-filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+  .band-btn {
+    border: 1px solid var(--border); background: var(--surface); color: var(--muted);
+    border-radius: 20px; padding: 4px 14px; font-size: 12px; font-weight: 600;
+    cursor: pointer; transition: background 0.15s, color 0.15s, border-color 0.15s;
+    user-select: none;
+  }
+  .band-btn:hover { color: var(--text); border-color: var(--muted); }
+  .band-btn.active-all  { background: rgba(129,140,248,0.18); border-color: var(--brand); color: var(--brand); }
+  .band-btn.active-critical { background: rgba(239,68,68,0.15); border-color: var(--critical); color: var(--critical); }
+  .band-btn.active-high     { background: rgba(249,115,22,0.15); border-color: var(--high); color: var(--high); }
+  .band-btn.active-medium   { background: rgba(234,179,8,0.15); border-color: var(--medium); color: var(--medium); }
+  .band-btn.active-low      { background: rgba(34,197,94,0.15); border-color: var(--low); color: var(--low); }
+  .band-btn.active-clean    { background: rgba(16,185,129,0.15); border-color: var(--clean); color: var(--clean); }
+
+  /* ── Microsoft toggle button ─────────────────────────────────────────── */
+  .ms-toggle-btn {
+    border: 1px solid var(--border); background: var(--surface); color: var(--muted);
+    border-radius: 20px; padding: 4px 14px; font-size: 12px; font-weight: 600;
+    cursor: pointer; transition: background 0.15s, color 0.15s, border-color 0.15s;
+    user-select: none;
+  }
+  .ms-toggle-btn:hover { color: var(--text); border-color: var(--muted); }
+  .ms-toggle-btn.hiding {
+    background: rgba(56,189,248,0.1); border-color: var(--accent); color: var(--accent);
+  }
+
   /* ── Top recommendations ─────────────────────────────────────────────── */
   .rec-list { list-style: none; }
   .rec-list li {
@@ -196,6 +225,34 @@
     border-radius: 8px; padding: 12px 16px; font-size: 13px; color: #fde047; margin-bottom: 24px;
   }
   .notice strong { color: #fbbf24; }
+
+  /* ── Callout banners ─────────────────────────────────────────────────── */
+  .callout {
+    border-radius: 8px; padding: 14px 18px; font-size: 13px; margin-bottom: 20px;
+    display: flex; align-items: flex-start; gap: 12px;
+  }
+  .callout-icon { font-size: 18px; line-height: 1.4; flex-shrink: 0; }
+  .callout-body { flex: 1; }
+  .callout-body strong { display: block; margin-bottom: 4px; font-size: 14px; }
+  .callout-info {
+    background: rgba(56,189,248,0.07); border: 1px solid rgba(56,189,248,0.25); color: #7dd3fc;
+  }
+  .callout-info strong { color: var(--accent); }
+  .callout-muted {
+    background: rgba(129,140,248,0.07); border: 1px solid rgba(129,140,248,0.2); color: #a5b4fc;
+  }
+  .callout-muted strong { color: var(--brand); }
+  .callout-warning {
+    background: rgba(234,179,8,0.08); border: 1px solid rgba(234,179,8,0.3); color: #fde047;
+  }
+  .callout-warning strong { color: #fbbf24; }
+  .callout-artifact-list {
+    list-style: none; margin-top: 8px;
+  }
+  .callout-artifact-list li {
+    padding: 3px 0; font-family: monospace; font-size: 12px;
+  }
+  .callout-artifact-list li::before { content: '• '; color: #fbbf24; }
 
   /* ── Print styles ────────────────────────────────────────────────────── */
   @media print {
@@ -277,6 +334,45 @@
       </div>
     </div>
 
+    <!-- ── Tool artifact cleanup reminder ───────────────────────────────── -->
+    {% if tool_artifact_apps %}
+    <div class="callout callout-warning">
+      <div class="callout-icon">&#9888;</div>
+      <div class="callout-body">
+        <strong>Cleanup Reminder — Enterprise-Zapp Scan App(s)</strong>
+        Enterprise-Zapp created the following app registration(s) during setup. Please delete them
+        after your audit to avoid leaving unused app registrations with active credentials in your tenant.
+        Run: <code>.\setup.ps1 -Cleanup</code>
+        <ul class="callout-artifact-list">
+          {% for app in tool_artifact_apps %}
+          <li>{{ app.display_name }} <span style="opacity:0.6;">({{ app.app_id }})</span></li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- ── Microsoft first-party apps banner ────────────────────────────── -->
+    {% if hide_microsoft and microsoft_app_count > 0 %}
+    <div class="callout callout-muted">
+      <div class="callout-icon">&#8505;</div>
+      <div class="callout-body">
+        <strong>{{ microsoft_app_count }} Microsoft first-party app{{ 's' if microsoft_app_count != 1 else '' }} excluded from this report</strong>
+        These are built-in Microsoft services (Teams, SharePoint, Azure AD, etc.) and are expected in your tenant.
+        To include them, re-run without the <code>--hide-microsoft</code> flag.
+      </div>
+    </div>
+    {% elif not hide_microsoft and microsoft_app_count > 0 %}
+    <div class="callout callout-info">
+      <div class="callout-icon">&#8505;</div>
+      <div class="callout-body">
+        <strong>This report includes {{ microsoft_app_count }} Microsoft first-party app{{ 's' if microsoft_app_count != 1 else '' }}</strong>
+        These are built-in Microsoft services (Teams, SharePoint, etc.) and are expected in your tenant.
+        Use <code>--hide-microsoft</code> to exclude them from the report.
+      </div>
+    </div>
+    {% endif %}
+
     <!-- Top recommendations -->
     <div class="section-title" style="margin-top: 32px; font-size: 15px;">Top Recommended Actions</div>
     <ul class="rec-list">
@@ -290,6 +386,82 @@
       </li>
       {% endfor %}
     </ul>
+  </div>
+
+  <!-- ── Full Inventory ─────────────────────────────────────────────────── -->
+  <div class="section">
+    <div class="section-title">
+      Full App Inventory
+      <div class="section-subtitle">All {{ total_apps }} enterprise apps — sortable and filterable</div>
+    </div>
+    <div class="band-filters" id="inv-band-filters">
+      <button class="band-btn active-all" data-band="" onclick="setBandFilter(this, '')">All</button>
+      <button class="band-btn" data-band="critical" onclick="setBandFilter(this, 'critical')">Critical</button>
+      <button class="band-btn" data-band="high" onclick="setBandFilter(this, 'high')">High</button>
+      <button class="band-btn" data-band="medium" onclick="setBandFilter(this, 'medium')">Medium</button>
+      <button class="band-btn" data-band="low" onclick="setBandFilter(this, 'low')">Low</button>
+      <button class="band-btn" data-band="clean" onclick="setBandFilter(this, 'clean')">Clean</button>
+      <button class="ms-toggle-btn" id="ms-toggle" onclick="toggleMicrosoft()">Hide Microsoft Apps</button>
+    </div>
+    <div class="filter-bar">
+      <input type="text" id="inv-search" placeholder="Search by name or app ID..." oninput="filterTable()">
+    </div>
+    <div class="table-wrap">
+      <table id="tbl-inventory">
+        <thead>
+          <tr>
+            <th onclick="sortTable('tbl-inventory', 0)">App Name</th>
+            <th onclick="sortTable('tbl-inventory', 1)">Risk Score</th>
+            <th onclick="sortTable('tbl-inventory', 2)">Risk Band</th>
+            <th onclick="sortTable('tbl-inventory', 3)">Last Sign-In</th>
+            <th onclick="sortTable('tbl-inventory', 4)">Owners</th>
+            <th onclick="sortTable('tbl-inventory', 5)">Assigned</th>
+            <th onclick="sortTable('tbl-inventory', 6)">Enabled</th>
+            <th>Signals</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for app in all_apps %}
+          <tr data-band="{{ app.risk_band }}" data-name="{{ app.display_name | lower }}" data-appid="{{ app.app_id | lower }}" data-microsoft="{{ 'true' if app.is_microsoft_first_party else 'false' }}" data-artifact="{{ 'true' if app.is_tool_artifact else 'false' }}">
+            <td>
+              <div class="app-name">{{ app.display_name }}</div>
+              <div class="app-id">{{ app.app_id }}</div>
+              {% set _desc = (app.description or app.notes or '') | trim %}
+              {% if _desc %}
+              <div class="app-desc" title="{{ _desc }}">{{ _desc[:100] }}{{ '…' if _desc | length > 100 else '' }}</div>
+              {% endif %}
+            </td>
+            <td data-val="{{ app.risk_score }}">
+              <div class="score-bar-wrap">
+                <div class="score-bar">
+                  <div class="score-bar-fill" style="width: {{ app.risk_score }}%; background: var(--{{ app.risk_band }})"></div>
+                </div>
+                <span class="score-num" style="color: var(--{{ app.risk_band }})">{{ app.risk_score }}</span>
+              </div>
+            </td>
+            <td data-val="{{ app.risk_band }}"><span class="badge badge-{{ app.risk_band }}">{{ app.risk_band }}</span></td>
+            <td data-val="{{ app.days_since_sign_in if app.days_since_sign_in is not none else 99999 }}">
+              {{ app.last_sign_in | format_date if app.last_sign_in else '—' }}
+            </td>
+            <td data-val="{{ app.owner_count }}">{{ app.owner_count }}</td>
+            <td data-val="{{ app.assignment_count }}">{{ app.assignment_count }}</td>
+            <td>{% if app.account_enabled %}<span style="color: var(--clean)">Yes</span>{% else %}<span style="color: var(--critical)">No</span>{% endif %}</td>
+            <td>
+              <div class="signals" style="gap: 4px;">
+                {% for sig in app.signals[:3] %}
+                <span class="signal-chip signal-{{ sig.severity }}" title="{{ sig.detail }}">{{ sig.key.replace('_', ' ') }}</span>
+                {% endfor %}
+                {% if app.signals | length > 3 %}
+                <span style="color: var(--muted); font-size: 11px;">+{{ app.signals | length - 3 }} more</span>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div id="inv-count" style="margin-top: 8px; font-size: 12px; color: var(--muted);"></div>
   </div>
 
   <!-- ── Critical & High Risk Apps ─────────────────────────────────────── -->
@@ -318,6 +490,10 @@
             <td>
               <div class="app-name">{{ app.display_name }}</div>
               <div class="app-id">{{ app.app_id }}</div>
+              {% set _desc = (app.description or app.notes or '') | trim %}
+              {% if _desc %}
+              <div class="app-desc" title="{{ _desc }}">{{ _desc[:100] }}{{ '…' if _desc | length > 100 else '' }}</div>
+              {% endif %}
             </td>
             <td>
               <div class="score-bar-wrap">
@@ -377,6 +553,10 @@
             <td>
               <div class="app-name">{{ app.display_name }}</div>
               <div class="app-id">{{ app.app_id }}</div>
+              {% set _desc = (app.description or app.notes or '') | trim %}
+              {% if _desc %}
+              <div class="app-desc" title="{{ _desc }}">{{ _desc[:100] }}{{ '…' if _desc | length > 100 else '' }}</div>
+              {% endif %}
             </td>
             <td>{{ app.last_sign_in | format_date if app.last_sign_in else 'Never' }}</td>
             <td>{% if app.days_since_sign_in is not none %}{{ app.days_since_sign_in }}d{% else %}—{% endif %}</td>
@@ -416,6 +596,10 @@
             <td>
               <div class="app-name">{{ app.display_name }}</div>
               <div class="app-id">{{ app.app_id }}</div>
+              {% set _desc = (app.description or app.notes or '') | trim %}
+              {% if _desc %}
+              <div class="app-desc" title="{{ _desc }}">{{ _desc[:100] }}{{ '…' if _desc | length > 100 else '' }}</div>
+              {% endif %}
             </td>
             <td>{% if app.has_expired_secret %}<span class="badge badge-critical">Yes</span>{% else %}—{% endif %}</td>
             <td>{% if app.has_expired_cert %}<span class="badge badge-critical">Yes</span>{% else %}—{% endif %}</td>
@@ -454,6 +638,10 @@
             <td>
               <div class="app-name">{{ app.display_name }}</div>
               <div class="app-id">{{ app.app_id }}</div>
+              {% set _desc = (app.description or app.notes or '') | trim %}
+              {% if _desc %}
+              <div class="app-desc" title="{{ _desc }}">{{ _desc[:100] }}{{ '…' if _desc | length > 100 else '' }}</div>
+              {% endif %}
             </td>
             <td>{{ app.owner_count }}</td>
             <td>{{ app.owners | selectattr('id', 'in', app.owners | map(attribute='id') | list) | list | length }}</td>
@@ -490,6 +678,10 @@
             <td>
               <div class="app-name">{{ app.display_name }}</div>
               <div class="app-id">{{ app.app_id }}</div>
+              {% set _desc = (app.description or app.notes or '') | trim %}
+              {% if _desc %}
+              <div class="app-desc" title="{{ _desc }}">{{ _desc[:100] }}{{ '…' if _desc | length > 100 else '' }}</div>
+              {% endif %}
             </td>
             <td>{{ app.last_sign_in | format_date if app.last_sign_in else '—' }}</td>
             <td><span class="badge badge-critical">Yes</span></td>
@@ -501,77 +693,6 @@
     </div>
   </div>
   {% endif %}
-
-  <!-- ── Full Inventory ─────────────────────────────────────────────────── -->
-  <div class="section">
-    <div class="section-title">
-      Full App Inventory
-      <div class="section-subtitle">All {{ total_apps }} enterprise apps — sortable and filterable</div>
-    </div>
-    <div class="filter-bar">
-      <input type="text" id="inv-search" placeholder="Search by name or app ID..." oninput="filterTable()">
-      <select id="inv-band" onchange="filterTable()">
-        <option value="">All risk bands</option>
-        <option value="critical">Critical</option>
-        <option value="high">High</option>
-        <option value="medium">Medium</option>
-        <option value="low">Low</option>
-        <option value="clean">Clean</option>
-      </select>
-    </div>
-    <div class="table-wrap">
-      <table id="tbl-inventory">
-        <thead>
-          <tr>
-            <th onclick="sortTable('tbl-inventory', 0)">App Name</th>
-            <th onclick="sortTable('tbl-inventory', 1)">Risk Score</th>
-            <th onclick="sortTable('tbl-inventory', 2)">Risk Band</th>
-            <th onclick="sortTable('tbl-inventory', 3)">Last Sign-In</th>
-            <th onclick="sortTable('tbl-inventory', 4)">Owners</th>
-            <th onclick="sortTable('tbl-inventory', 5)">Assigned</th>
-            <th onclick="sortTable('tbl-inventory', 6)">Enabled</th>
-            <th>Signals</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for app in all_apps %}
-          <tr data-band="{{ app.risk_band }}" data-name="{{ app.display_name | lower }}" data-appid="{{ app.app_id | lower }}">
-            <td>
-              <div class="app-name">{{ app.display_name }}</div>
-              <div class="app-id">{{ app.app_id }}</div>
-            </td>
-            <td data-val="{{ app.risk_score }}">
-              <div class="score-bar-wrap">
-                <div class="score-bar">
-                  <div class="score-bar-fill" style="width: {{ app.risk_score }}%; background: var(--{{ app.risk_band }})"></div>
-                </div>
-                <span class="score-num" style="color: var(--{{ app.risk_band }})">{{ app.risk_score }}</span>
-              </div>
-            </td>
-            <td data-val="{{ app.risk_band }}"><span class="badge badge-{{ app.risk_band }}">{{ app.risk_band }}</span></td>
-            <td data-val="{{ app.days_since_sign_in if app.days_since_sign_in is not none else 99999 }}">
-              {{ app.last_sign_in | format_date if app.last_sign_in else '—' }}
-            </td>
-            <td data-val="{{ app.owner_count }}">{{ app.owner_count }}</td>
-            <td data-val="{{ app.assignment_count }}">{{ app.assignment_count }}</td>
-            <td>{% if app.account_enabled %}<span style="color: var(--clean)">Yes</span>{% else %}<span style="color: var(--critical)">No</span>{% endif %}</td>
-            <td>
-              <div class="signals" style="gap: 4px;">
-                {% for sig in app.signals[:3] %}
-                <span class="signal-chip signal-{{ sig.severity }}" title="{{ sig.detail }}">{{ sig.key.replace('_', ' ') }}</span>
-                {% endfor %}
-                {% if app.signals | length > 3 %}
-                <span style="color: var(--muted); font-size: 11px;">+{{ app.signals | length - 3 }} more</span>
-                {% endif %}
-              </div>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    <div id="inv-count" style="margin-top: 8px; font-size: 12px; color: var(--muted);"></div>
-  </div>
 
   <!-- ── Methodology ────────────────────────────────────────────────────── -->
   <div class="section">
@@ -668,26 +789,86 @@ function sortTable(tableId, colIndex) {
   rows.forEach(row => tbody.appendChild(row));
 }
 
+// ── Inventory filter state ────────────────────────────────────────────────────
+let _activeBand = '';
+let _hideMicrosoft = false;
+
+// ── Band filter buttons ───────────────────────────────────────────────────────
+function setBandFilter(btn, band) {
+  _activeBand = band;
+
+  // Update button active classes
+  document.querySelectorAll('#inv-band-filters .band-btn').forEach(function(b) {
+    // Remove all active-* classes
+    b.className = b.className.replace(/\bactive-\S+/g, '').trim();
+  });
+
+  if (band === '') {
+    btn.classList.add('active-all');
+  } else {
+    btn.classList.add('active-' + band);
+  }
+
+  filterTable();
+}
+
+// ── Microsoft toggle ──────────────────────────────────────────────────────────
+function toggleMicrosoft() {
+  _hideMicrosoft = !_hideMicrosoft;
+  var btn = document.getElementById('ms-toggle');
+  filterTable();  // Apply filter first to know the hidden count
+
+  if (_hideMicrosoft) {
+    var hiddenCount = document.querySelectorAll('#tbl-inventory tbody tr[data-microsoft="true"]').length;
+    btn.textContent = 'Show All (' + hiddenCount + ' Microsoft hidden)';
+    btn.classList.add('hiding');
+  } else {
+    btn.textContent = 'Hide Microsoft Apps';
+    btn.classList.remove('hiding');
+  }
+}
+
 // ── Inventory filter ─────────────────────────────────────────────────────────
 function filterTable() {
   const search = document.getElementById('inv-search').value.toLowerCase();
-  const band   = document.getElementById('inv-band').value.toLowerCase();
   const rows   = document.querySelectorAll('#tbl-inventory tbody tr');
   let visible  = 0;
 
-  rows.forEach(row => {
-    const name   = row.dataset.name   || '';
-    const appid  = row.dataset.appid  || '';
-    const rband  = row.dataset.band   || '';
-    const matchSearch = !search || name.includes(search) || appid.includes(search);
-    const matchBand   = !band   || rband === band;
-    const show = matchSearch && matchBand;
+  rows.forEach(function(row) {
+    const name      = row.dataset.name      || '';
+    const appid     = row.dataset.appid     || '';
+    const rband     = row.dataset.band      || '';
+    const isMsft    = row.dataset.microsoft === 'true';
+
+    const matchSearch    = !search      || name.includes(search) || appid.includes(search);
+    const matchBand      = !_activeBand || rband === _activeBand;
+    const matchMicrosoft = !_hideMicrosoft || !isMsft;
+
+    const show = matchSearch && matchBand && matchMicrosoft;
     row.style.display = show ? '' : 'none';
     if (show) visible++;
   });
 
   const counter = document.getElementById('inv-count');
-  counter.textContent = `Showing ${visible} of ${rows.length} apps`;
+  const total   = document.querySelectorAll('#tbl-inventory tbody tr').length;
+  counter.textContent = 'Showing ' + visible + ' of ' + total + ' apps';
+
+  // Keep toggle button count in sync when other filters change while MS hidden
+  if (_hideMicrosoft) {
+    var msHiddenAndMatchOther = 0;
+    rows.forEach(function(row) {
+      if (row.dataset.microsoft === 'true') {
+        const name   = row.dataset.name  || '';
+        const appid  = row.dataset.appid || '';
+        const rband  = row.dataset.band  || '';
+        const matchS = !search      || name.includes(search) || appid.includes(search);
+        const matchB = !_activeBand || rband === _activeBand;
+        if (matchS && matchB) msHiddenAndMatchOther++;
+      }
+    });
+    var btn = document.getElementById('ms-toggle');
+    btn.textContent = 'Show All (' + msHiddenAndMatchOther + ' Microsoft hidden)';
+  }
 }
 
 // Init counter
