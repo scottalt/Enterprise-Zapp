@@ -128,13 +128,15 @@ This creates a temporary, read-only app registration in your tenant, grants admi
 ### Step 2 — Install Python dependencies
 
 ```bash
-pip install -r requirements.txt
+pip install -e .
 ```
+
+This installs Enterprise-Zapp in editable mode, which makes the `enterprise-zapp` command available in your terminal and picks up any local code changes automatically.
 
 ### Step 3 — Run the scan
 
 ```bash
-python -m src.cli
+enterprise-zapp
 ```
 
 You'll be prompted to authenticate via Microsoft's device code flow — no passwords stored, no service accounts required:
