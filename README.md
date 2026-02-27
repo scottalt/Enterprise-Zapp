@@ -106,7 +106,8 @@ Each app receives a **risk score (0–100)** and a **risk band** (Critical / Hig
 |-------------|-------|
 | PowerShell 7+ | For `setup.ps1` — one-time app registration |
 | Microsoft.Graph PowerShell module | Auto-installed by `setup.ps1` |
-| Global Admin or Privileged Role Admin | Required for `setup.ps1` only |
+| **Privileged Role Administrator** (or Global Administrator) | Required to run `setup.ps1` and grant admin consent |
+| **Security Reader** | Minimum role to authenticate and run the scan |
 | Python 3.10+ | For the scan tool |
 
 ---
@@ -115,7 +116,7 @@ Each app receives a **risk score (0–100)** and a **risk band** (Critical / Hig
 
 ### Step 1 — Create the temporary app registration
 
-Open PowerShell as a **Global Admin or Privileged Role Admin** and run:
+Open PowerShell as a **Privileged Role Administrator** (or Global Administrator) and run:
 
 ```powershell
 .\setup.ps1
@@ -230,6 +231,31 @@ Enterprise-Zapp requests the following **application, read-only** Microsoft Grap
 | `User.Read.All` | Read disabled/deleted user accounts for orphan detection | Owner validation |
 
 > **Entra ID P1/P2 required for sign-in activity.** The `AuditLog.Read.All` permission alone is not sufficient — the underlying `servicePrincipalSignInActivities` API requires an Entra ID Premium P1 or P2 license. Without it the scan still runs, but staleness signals will be unavailable. The report notes clearly when this data is missing.
+
+---
+
+## Required Entra ID Roles
+
+Enterprise-Zapp involves two separate authentication steps, each with its own role requirement.
+
+### Step 1 — Running `setup.ps1` (one-time, admin only)
+
+`setup.ps1` creates an app registration and grants **admin consent** for Microsoft Graph application permissions. This requires the ability to consent on behalf of the organisation.
+
+| Role | Notes |
+|------|-------|
+| **Privileged Role Administrator** | Minimum required role. Can grant admin consent for Graph application permissions. |
+| Global Administrator | Also works, but broader than necessary. |
+
+> **Application Administrator and Cloud Application Administrator are not sufficient.** These roles can create app registrations but [cannot grant admin consent for Microsoft Graph application permissions](https://learn.microsoft.com/en-us/entra/identity/role-based-access-control/permissions-reference). Only Privileged Role Administrator and Global Administrator have this capability.
+
+### Step 2 — Running the scan
+
+The scan authenticates as the app registration (device code flow) and calls read-only Microsoft Graph endpoints. No elevated directory role is required at runtime — permissions were pre-consented in Step 1.
+
+However, the **person authenticating** needs an Entra ID account in the tenant. No specific Entra ID directory role is required to complete device code authentication as a user, as long as admin consent was granted in Step 1.
+
+> **Tip for auditors:** A dedicated **Security Reader** service account is a clean fit for running scans. Security Reader covers read access to security-related data including sign-in activity reports.
 
 ---
 
