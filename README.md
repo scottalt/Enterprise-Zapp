@@ -46,15 +46,16 @@ Enterprise-Zapp scans your Microsoft Entra ID tenant for enterprise app hygiene 
 **What the terminal output looks like:**
 
 ```
-  ╔══════════════════════════════════════════╗
-  ║  Risk Summary — 67 apps scanned         ║
-  ╠════════════╦═══════╦═════════════════════╣
-  ║ Critical   ║     2 ║ AppX, OldAPI        ║
-  ║ High       ║     8 ║ Stale-Bot, ...      ║
-  ║ Medium     ║    41 ║ Teams, SharePoint.. ║
-  ║ Low        ║    14 ║                     ║
-  ║ Clean      ║     2 ║                     ║
-  ╚════════════╩═══════╩═════════════════════╝
+                    Risk Summary — 67 apps scanned
+┌───────────┬───────┬──────────────────────────────────────────────────────────────────────────────────┐
+│ Risk Band │ Count │ Apps                                                                             │
+├───────────┼───────┼──────────────────────────────────────────────────────────────────────────────────┤
+│ Critical  │     0 │                                                                                  │
+│ High      │     0 │                                                                                  │
+│ Medium    │    66 │ AAD App Management, AAD Request Verification Service - PROD, AADReporting, Adobe │
+│ Low       │     1 │ Enterprise-Zapp-Scan-2026-02-27                                                  │
+│ Clean     │     0 │                                                                                  │
+└───────────┴───────┴──────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 **The HTML report includes:**
