@@ -4,10 +4,13 @@ build-backend = "setuptools.backends.legacy:build"
 
 [project]
 name = "enterprise-zapp"
-version = "0.1.0"
+version = "0.2.0"
 description = "Read-only Entra ID enterprise app hygiene scanner — identify stale apps, expired credentials, orphaned registrations, and over-privileged service principals."
 readme = "README.md"
 license = { file = "LICENSE" }
+authors = [
+    { name = "Scott Altiparmak", email = "" },
+]
 requires-python = ">=3.10"
 keywords = [
     "entra-id", "azure-ad", "security", "enterprise-apps",
@@ -44,6 +47,7 @@ enterprise-zapp = "src.cli:main"
 Homepage = "https://github.com/scottalt/Enterprise-Zapp"
 Repository = "https://github.com/scottalt/Enterprise-Zapp"
 Issues = "https://github.com/scottalt/Enterprise-Zapp/issues"
+Author = "https://www.linkedin.com/in/scottaltiparmak/"
 
 [tool.setuptools.packages.find]
 where = ["."]

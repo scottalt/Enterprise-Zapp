@@ -8,6 +8,7 @@ Usage:
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -36,6 +37,7 @@ BANNER = f"""
 [/bold]
 [dim]  Entra ID Enterprise App Hygiene Scanner  ·  v{__version__}[/dim]
 [bold green]  Read-Only. No changes will be made to your Entra ID tenant.[/bold green]
+[dim]  By Scott Altiparmak · https://www.linkedin.com/in/scottaltiparmak/[/dim]
 """
 
 
@@ -117,11 +119,27 @@ def main(
         )
     )
 
+    console.print(
+        Panel(
+            "[bold red]DISCLAIMER[/bold red]\n"
+            "This tool is provided [bold]as-is[/bold], without warranty of any kind.\n"
+            "[bold]Scott Altiparmak[/bold] ([cyan]linkedin.com/in/scottaltiparmak[/cyan]) "
+            "accepts [bold red]no responsibility or liability[/bold red] for any issues, "
+            "damages, or consequences arising from running this tool in your environment.\n"
+            "[dim]Use entirely at your own risk. Validate all findings before taking action.[/dim]",
+            border_style="red",
+            title="[bold red]Use At Your Own Risk[/bold red]",
+        )
+    )
+
     # ── Authenticate ────────────────────────────────────────────────────────
     if from_cache:
         console.print(f"[cyan]Cache mode — loading data from {from_cache}[/cyan]")
-        import json
-        raw_data = json.loads(from_cache.read_text(encoding="utf-8"))
+        try:
+            raw_data = json.loads(from_cache.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError) as exc:
+            console.print(f"[red]Error reading cache file: {exc}[/red]")
+            sys.exit(1)
         tenant_name = raw_data.get("tenant", {}).get("displayName", "cached tenant")
         console.print(f"[green]Loaded cache for:[/green] {tenant_name}")
     else:

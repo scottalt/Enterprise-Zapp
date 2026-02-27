@@ -54,7 +54,10 @@ class GraphClient:
                 continue
 
             if resp.status_code in (401, 403):
-                msg = resp.json().get("error", {}).get("message", resp.text)
+                try:
+                    msg = resp.json().get("error", {}).get("message", resp.text)
+                except Exception:
+                    msg = resp.text
                 raise PermissionError(f"Graph API access denied ({resp.status_code}): {msg}")
 
             if resp.status_code in (500, 502, 503, 504) and attempt < MAX_RETRIES - 1:
