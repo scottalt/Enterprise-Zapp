@@ -4,7 +4,7 @@ build-backend = "setuptools.backends.legacy:build"
 
 [project]
 name = "enterprise-zapp"
-version = "0.2.0"
+version = "0.3.0"
 description = "Read-only Entra ID enterprise app hygiene scanner — identify stale apps, expired credentials, orphaned registrations, and over-privileged service principals."
 readme = "README.md"
 license = { file = "LICENSE" }
