@@ -173,7 +173,8 @@ def generate_html(
     collected_at_raw = raw_data.get("collected_at", "")
     try:
         collected_at_dt = datetime.fromisoformat(collected_at_raw.replace("Z", "+00:00"))
-        collected_at = collected_at_dt.strftime("%Y-%m-%d %H:%M UTC")
+        # Convert to local time so the report reflects when the scan ran locally
+        collected_at = collected_at_dt.astimezone().strftime("%Y-%m-%d %H:%M %Z")
     except (ValueError, TypeError):
         collected_at = collected_at_raw
 
@@ -320,7 +321,7 @@ def generate_all(
 
     tenant = raw_data.get("tenant", {})
     tenant_slug = _tenant_slug(tenant.get("displayName", "tenant"))
-    date_slug = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    date_slug = datetime.now().strftime("%Y-%m-%d")  # local date for filename
     base = output_dir / f"enterprise_zapp_{tenant_slug}_{date_slug}"
 
     html_path = Path(str(base) + ".html")

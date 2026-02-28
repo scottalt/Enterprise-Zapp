@@ -1032,6 +1032,23 @@ function filterTable() {
 // Init counter
 filterTable();
 
+// ── Dynamic nav height ────────────────────────────────────────────────────────
+// The hardcoded CSS --nav-height may not match the rendered nav height exactly,
+// causing the sticky column header to clip the first data row on initial load.
+// Measure the actual nav and update the variable immediately + on resize.
+(function() {
+  function updateNavHeight() {
+    var nav = document.getElementById('sticky-nav');
+    if (nav) {
+      document.documentElement.style.setProperty('--nav-height', nav.offsetHeight + 'px');
+    }
+  }
+  updateNavHeight();
+  window.addEventListener('resize', updateNavHeight, { passive: true });
+  // Re-measure after fonts/images settle (avoids FOUC-related mis-measurement)
+  window.addEventListener('load', updateNavHeight, { passive: true });
+})();
+
 // ── Scroll spy for sticky nav ─────────────────────────────────────────────────
 (function() {
   var sections = document.querySelectorAll('.section[id]');
