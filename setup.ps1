@@ -53,6 +53,7 @@ $RequiredPermissions = @(
 )
 
 function Write-Banner {
+    param([string]$Mode = "Setup")
     Write-Host ""
     Write-Host "  ███████╗ ███╗  ██╗ ████████╗ ███████╗ ██████╗  ██████╗ ██╗ ███████╗ ███████╗" -ForegroundColor Cyan
     Write-Host "  ██╔════╝ ████╗ ██║ ╚══██╔══╝ ██╔════╝ ██╔══██╗ ██╔══██╗██║ ██╔════╝ ██╔════╝" -ForegroundColor Cyan
@@ -62,8 +63,13 @@ function Write-Banner {
     Write-Host "  ╚══════╝ ╚═╝  ╚══╝    ╚═╝    ╚══════╝ ╚═╝  ╚═╝ ╚═╝     ╚═╝ ╚══════╝ ╚══════╝" -ForegroundColor Cyan
     Write-Host "                              Z A P P" -ForegroundColor Yellow
     Write-Host ""
-    Write-Host "  Entra ID Enterprise App Hygiene Scanner — Setup" -ForegroundColor White
-    Write-Host "  Read-only. No changes made to your tenant." -ForegroundColor Green
+    if ($Mode -eq "Cleanup") {
+        Write-Host "  Entra ID Enterprise App Hygiene Scanner — Cleanup" -ForegroundColor White
+        Write-Host "  Removing the Enterprise-Zapp app registration from your tenant." -ForegroundColor Yellow
+    } else {
+        Write-Host "  Entra ID Enterprise App Hygiene Scanner — Setup" -ForegroundColor White
+        Write-Host "  Read-only. No changes made to your tenant." -ForegroundColor Green
+    }
     Write-Host ""
 }
 
@@ -260,11 +266,14 @@ function New-AppRegistration {
 }
 
 # ── Entry point ───────────────────────────────────────────────────────────────
-Write-Banner
+if ($Cleanup) {
+    Write-Banner -Mode "Cleanup"
+} else {
+    Write-Banner -Mode "Setup"
+}
 Install-GraphModule
 
 if ($Cleanup) {
-    Write-Host "[*] Cleanup mode: removing Enterprise-Zapp app registration..." -ForegroundColor Yellow
     Remove-ExistingApp
 } else {
     New-AppRegistration
