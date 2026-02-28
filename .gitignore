@@ -26,6 +26,11 @@ venv/
 env/
 ENV/
 
+# ── Test / coverage ───────────────────────────────────────────────────────────
+.coverage
+htmlcov/
+.pytest_cache/
+
 # ── Editor / tooling ──────────────────────────────────────────────────────────
 .claude/
 .vscode/
