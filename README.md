@@ -37,6 +37,22 @@ Enterprise-Zapp scans your Microsoft Entra ID tenant for enterprise app hygiene 
 
 ---
 
+## How It Compares
+
+Other tools exist in this space. Here is an honest look at where Enterprise-Zapp fits:
+
+| Tool | Focus | Notes |
+|------|-------|-------|
+| **Entra ID portal (native)** | General tenant management | App hygiene information exists but is scattered across multiple blades. No consolidated risk view, no exportable report. |
+| **Maester** | Entra configuration compliance | Excellent open source PowerShell framework for testing configuration drift against known baselines. Different focus than app inventory and risk scoring. |
+| **AzureHound / BloodHound** | Attack path analysis | Heavier to run, different use case. Useful for understanding attack paths, not for app hygiene inventory. |
+| **Commercial SSPM tools** (AppOmni, Obsidian, Varonis, etc.) | Full SaaS security posture | Do this well and more. Require vendor relationships and significant budget. Enterprise-Zapp is a free alternative for teams that need visibility without a procurement process. |
+| **Enterprise-Zapp** | App and service principal hygiene | Lightweight, free, Python-based. Risk-rated inventory with a shareable HTML report, focused specifically on Entra app sprawl. |
+
+If you are already running a commercial SSPM that covers Entra, Enterprise-Zapp is probably redundant. If you are not, it fills a gap that does not have a clean free alternative.
+
+---
+
 ## Screenshots
 
 ![Report Overview](https://raw.githubusercontent.com/scottalt/Enterprise-Zapp/docs/assets/report-overview.png)
