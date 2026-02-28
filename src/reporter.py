@@ -182,11 +182,17 @@ def generate_html(
         collected_at = collected_at_raw
 
     # ── Conditional Access coverage ─────────────────────────────────────────
-    # ca_permission_granted distinguishes "no permission" from "zero policies configured"
-    ca_permission_granted = raw_data.get("ca_permission_granted", False)
+    # ca_in_cache distinguishes new cache files (which have this key) from old
+    # cache files that predate CA support entirely.
+    ca_in_cache = "ca_permission_granted" in raw_data
+    # ca_permission_granted: True = permission granted, False = explicitly denied,
+    # None = old cache format that did not record this field.
+    ca_permission_granted = raw_data.get("ca_permission_granted", None)
     ca_app_coverages = ca_app_coverages or []
     ca_policy_summaries = ca_policy_summaries or []
-    ca_available = ca_permission_granted
+    # ca_available only when permission was explicitly granted (True); treat
+    # False (denied) and None (old cache) the same for coverage calculation.
+    ca_available = ca_permission_granted is True
     if ca_available:
         covered_count = sum(1 for c in ca_app_coverages if c.is_covered)
         ca_coverage_pct = round(covered_count / len(ca_app_coverages) * 100) if ca_app_coverages else 0
@@ -217,6 +223,8 @@ def generate_html(
         tool_artifact_apps=tool_artifact_apps,
         ca_available=ca_available,
         ca_permission_granted=ca_permission_granted,
+        ca_in_cache=ca_in_cache,
+        ca_in_cache=ca_in_cache,
         ca_app_coverages=ca_app_coverages,
         ca_policy_summaries=ca_policy_summaries,
         ca_covered_count=covered_count,

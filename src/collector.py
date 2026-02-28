@@ -20,6 +20,7 @@ from rich.progress import (
     TimeElapsedColumn,
 )
 
+from . import __version__
 from .graph import GraphClient
 
 console = Console()
@@ -122,6 +123,7 @@ def collect(client: GraphClient, output_dir: Path, cache_path: Path | None = Non
         console.print("[dim]CA policies: none configured in this tenant.[/dim]")
 
     result = {
+        "schema_version": __version__,
         "tenant": tenant,
         "apps": enriched,
         "ca_policies": ca_policies,
