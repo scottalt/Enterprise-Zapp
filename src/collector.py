@@ -56,6 +56,28 @@ def collect(client: GraphClient, output_dir: Path, cache_path: Path | None = Non
     else:
         console.print(f"[green]Sign-in records:[/green] {len(sign_in_map):,}")
 
+    # ── Step 2b: Application credentials ───────────────────────────────────
+    # Credentials (passwordCredentials, keyCredentials) and implicit-grant
+    # settings live on the Application registration, not on the Service
+    # Principal. Fetch all app registrations and build a lookup by appId.
+    app_cred_map: dict[str, dict] = {}
+    try:
+        with console.status("[cyan]Fetching application credential data..."):
+            for app in client.get_applications():
+                if app_id_key := app.get("appId"):
+                    web = app.get("web") or {}
+                    implicit = web.get("implicitGrantSettings") or {}
+                    app_cred_map[app_id_key] = {
+                        "passwordCredentials": app.get("passwordCredentials") or [],
+                        "keyCredentials": app.get("keyCredentials") or [],
+                        "oauth2AllowImplicitFlow": implicit.get("enableAccessTokenIssuance", False),
+                        "oauth2AllowIdTokenIssuance": implicit.get("enableIdTokenIssuance", False),
+                    }
+        console.print(f"[green]App registrations found:[/green] {len(app_cred_map):,}")
+    except (PermissionError, RuntimeError) as exc:
+        skipped.append("app_credentials")
+        console.print(f"[yellow]App credential data unavailable ({exc}). Credential signals will be limited.[/yellow]")
+
     # ── Step 3: disabled users (for orphan detection) ──────────────────────
     with console.status("[cyan]Fetching disabled user list..."):
         disabled_user_ids = client.get_disabled_users()
@@ -93,9 +115,20 @@ def collect(client: GraphClient, output_dir: Path, cache_path: Path | None = Non
             app_permissions = client.get_sp_app_role_assigned_to(sp_id)
             sign_in = sign_in_map.get(app_id, {})
 
+            # Merge credential + auth data from the linked Application registration.
+            # These fields are not returned on the SP endpoint — they live on the
+            # Application object and must be overlaid here.
+            app_cred = app_cred_map.get(app_id, {})
+
             enriched.append(
                 {
                     **sp,
+                    # Application-sourced fields (override empty SP values)
+                    "passwordCredentials": app_cred.get("passwordCredentials") or sp.get("passwordCredentials") or [],
+                    "keyCredentials": app_cred.get("keyCredentials") or sp.get("keyCredentials") or [],
+                    "oauth2AllowImplicitFlow": app_cred.get("oauth2AllowImplicitFlow", sp.get("oauth2AllowImplicitFlow", False)),
+                    "oauth2AllowIdTokenIssuance": app_cred.get("oauth2AllowIdTokenIssuance", sp.get("oauth2AllowIdTokenIssuance", False)),
+                    # SP-sourced enrichment keys
                     "_assignments": app_role_assignments,
                     "_owners": owners,
                     "_delegatedGrants": delegated_grants,

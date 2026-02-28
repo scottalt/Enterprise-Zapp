@@ -9,10 +9,10 @@
     "createdDateTime": "2024-01-15T10:00:00Z",
     "passwordCredentials": [],
     "keyCredentials": [],
-    "_assignments": [{"id": "assign-1", "principalType": "User"}],
+    "_assignments": [],
     "_owners": [{"id": "user-1", "displayName": "Alice Smith", "accountEnabled": true}],
     "_delegatedGrants": [],
-    "_appPermissions": [],
+    "_appPermissions": [{"id": "assign-1", "principalType": "User"}],
     "_signInActivity": {
       "appId": "bbbbbbbb-0001-0001-0001-bbbbbbbbbbbb",
       "lastSignInActivity": { "lastSignInDateTime": "2026-02-20T12:00:00Z" }
@@ -56,10 +56,10 @@
       }
     ],
     "keyCredentials": [],
-    "_assignments": [{"id": "assign-2", "principalType": "Group"}],
+    "_assignments": [],
     "_owners": [{"id": "user-2", "displayName": "Bob Jones", "accountEnabled": true}],
     "_delegatedGrants": [],
-    "_appPermissions": [],
+    "_appPermissions": [{"id": "assign-2", "principalType": "Group"}],
     "_signInActivity": {
       "appId": "bbbbbbbb-0003-0003-0003-bbbbbbbbbbbb",
       "lastSignInActivity": { "lastSignInDateTime": "2026-01-15T10:00:00Z" }
@@ -76,16 +76,16 @@
     "createdDateTime": "2020-01-01T10:00:00Z",
     "passwordCredentials": [],
     "keyCredentials": [],
-    "_assignments": [],
-    "_owners": [],
-    "_delegatedGrants": [],
-    "_appPermissions": [
+    "_assignments": [
       {
         "appRoleId": "19dbc75e-c2e2-444c-a770-ec69d8559fc7",
         "resourceDisplayName": "Microsoft Graph",
         "principalDisplayName": "High Privilege Stale App"
       }
     ],
+    "_owners": [],
+    "_delegatedGrants": [],
+    "_appPermissions": [],
     "_signInActivity": {
       "appId": "bbbbbbbb-0004-0004-0004-bbbbbbbbbbbb",
       "lastSignInActivity": { "lastSignInDateTime": "2024-06-01T00:00:00Z" }

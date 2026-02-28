@@ -116,15 +116,31 @@ class GraphClient:
                 "$select": (
                     "id,appId,displayName,description,accountEnabled,servicePrincipalType,"
                     "tags,appRoles,oauth2PermissionScopes,"
-                    "passwordCredentials,keyCredentials,createdDateTime,"
-                    "appOwnerOrganizationId,homepage,replyUrls,notes,"
-                    "oauth2AllowIdTokenIssuance,oauth2AllowImplicitFlow,signInAudience"
+                    "createdDateTime,appOwnerOrganizationId,homepage,replyUrls,notes,"
+                    "signInAudience"
                 )
             },
         )
 
+    def get_applications(self) -> Generator[dict, None, None]:
+        """
+        Yield all application registrations owned by this tenant.
+
+        Credentials (passwordCredentials, keyCredentials) and implicit-grant
+        settings live on the Application object, NOT on the linked Service
+        Principal, so they must be fetched here and merged during enrichment.
+        Requires Application.Read.All.
+        """
+        yield from self.get_paged(
+            "/applications",
+            params={"$select": "appId,passwordCredentials,keyCredentials,web"},
+        )
+
     def get_sp_app_role_assignments(self, sp_id: str) -> list[dict]:
-        """Users and groups assigned to this service principal."""
+        """
+        App role assignments granted TO this service principal — i.e. the API
+        permissions this SP holds on other resources (e.g. Graph app roles).
+        """
         try:
             return list(self.get_paged(f"/servicePrincipals/{sp_id}/appRoleAssignments"))
         except (PermissionError, RuntimeError):
@@ -150,7 +166,11 @@ class GraphClient:
             return []
 
     def get_sp_app_role_assigned_to(self, sp_id: str) -> list[dict]:
-        """Application role assignments granted TO this SP (app permissions it holds)."""
+        """
+        Users, groups, and service principals that have been assigned roles IN
+        this app — i.e. the user/group assignments visible in the Enterprise App
+        blade.
+        """
         try:
             return list(self.get_paged(f"/servicePrincipals/{sp_id}/appRoleAssignedTo"))
         except (PermissionError, RuntimeError):

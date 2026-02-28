@@ -36,10 +36,10 @@ BASE_SP: dict = {
     "passwordCredentials": [],
     "keyCredentials": [],
     "replyUrls": [],
-    "_assignments": [{"id": "assign-test", "principalType": "User"}],
+    "_assignments": [],
     "_owners": [{"id": "owner-1", "displayName": "Test Owner", "accountEnabled": True}],
     "_delegatedGrants": [],
-    "_appPermissions": [],
+    "_appPermissions": [{"id": "assign-test", "principalType": "User"}],
     # Empty sign-in block with no lastSignInActivity — avoids never_signed_in trigger
     "_signInActivity": {},
     "_disabledOwnerIds": [],
@@ -658,7 +658,7 @@ class TestMultiTenant:
         sp = {
             **BASE_SP,
             "signInAudience": "AzureADMultipleOrgs",
-            "_appPermissions": [
+            "_assignments": [
                 {
                     "appRoleId": "19dbc75e-c2e2-444c-a770-ec69d8559fc7",  # Directory.ReadWrite.All
                     "resourceDisplayName": "Microsoft Graph",

@@ -253,9 +253,11 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
     is_tool_artifact = display_name.startswith("Enterprise-Zapp-Scan-")
 
     owners: list[dict] = sp.get("_owners", [])
-    assignments: list[dict] = sp.get("_assignments", [])
+    # _appPermissions = users/groups assigned TO this app (appRoleAssignedTo)
+    assignments: list[dict] = sp.get("_appPermissions", [])
     delegated_grants: list[dict] = sp.get("_delegatedGrants", [])
-    app_permissions: list[dict] = sp.get("_appPermissions", [])
+    # _assignments = API permissions granted TO this SP (appRoleAssignments)
+    app_permissions: list[dict] = sp.get("_assignments", [])
     disabled_owner_ids: list[str] = sp.get("_disabledOwnerIds", [])
     sign_in: dict = sp.get("_signInActivity", {})
 
