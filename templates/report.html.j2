@@ -109,13 +109,24 @@
   .score-num { font-size: 12px; font-weight: 700; min-width: 28px; text-align: right; }
 
   /* ── Tables ──────────────────────────────────────────────────────────── */
-  .table-wrap { overflow-x: auto; border-radius: 12px; border: 1px solid var(--border); }
+  /*
+   * Each table lives inside a scrollable .table-wrap container.
+   * thead th sticks to top:0 of that container — completely independent
+   * of the page sticky-nav, so no nav-height coordination needed.
+   */
+  .table-wrap {
+    overflow-x: auto;
+    overflow-y: auto;
+    max-height: 70vh;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+  }
   table { width: 100%; border-collapse: collapse; }
   thead th {
     background: var(--surface2); color: var(--muted);
     font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
     padding: 10px 14px; text-align: left; white-space: nowrap;
-    position: sticky; top: var(--nav-height); z-index: 2;
+    position: sticky; top: 0; z-index: 2;
     cursor: pointer; user-select: none;
   }
   thead th:hover { color: var(--text); }
@@ -1032,10 +1043,10 @@ function filterTable() {
 // Init counter
 filterTable();
 
-// ── Dynamic nav height ────────────────────────────────────────────────────────
-// The hardcoded CSS --nav-height may not match the rendered nav height exactly,
-// causing the sticky column header to clip the first data row on initial load.
-// Measure the actual nav and update the variable immediately + on resize.
+// ── Dynamic nav height (used for section scroll-margin-top) ──────────────────
+// Tables no longer rely on --nav-height for their sticky headers — they use
+// overflow-y scroll containers with top:0. This variable only drives the
+// scroll-margin-top on .section elements so nav anchor links land correctly.
 (function() {
   function updateNavHeight() {
     var nav = document.getElementById('sticky-nav');
@@ -1045,7 +1056,6 @@ filterTable();
   }
   updateNavHeight();
   window.addEventListener('resize', updateNavHeight, { passive: true });
-  // Re-measure after fonts/images settle (avoids FOUC-related mis-measurement)
   window.addEventListener('load', updateNavHeight, { passive: true });
 })();
 
