@@ -37,22 +37,6 @@ Enterprise-Zapp scans your Microsoft Entra ID tenant for enterprise app hygiene 
 
 ---
 
-## How It Compares
-
-Other tools exist in this space. Here is an honest look at where Enterprise-Zapp fits:
-
-| Tool | Focus | Notes |
-|------|-------|-------|
-| **Entra ID portal (native)** | General tenant management | App hygiene information exists but is scattered across multiple blades. No consolidated risk view, no exportable report. |
-| **Maester** | Entra configuration compliance | Excellent open source PowerShell framework for testing configuration drift against known baselines. Different focus than app inventory and risk scoring. |
-| **AzureHound / BloodHound** | Attack path analysis | Heavier to run, different use case. Useful for understanding attack paths, not for app hygiene inventory. |
-| **Commercial SSPM tools** (AppOmni, Obsidian, Varonis, etc.) | Full SaaS security posture | Do this well and more. Require vendor relationships and significant budget. Enterprise-Zapp is a free alternative for teams that need visibility without a procurement process. |
-| **Enterprise-Zapp** | App and service principal hygiene | Lightweight, free, Python-based. Risk-rated inventory with a shareable HTML report, focused specifically on Entra app sprawl. |
-
-If you are already running a commercial SSPM that covers Entra, Enterprise-Zapp is probably redundant. If you are not, it fills a gap that does not have a clean free alternative.
-
----
-
 ## Screenshots
 
 ![Report Overview](https://raw.githubusercontent.com/scottalt/Enterprise-Zapp/docs/assets/report-overview.png)
@@ -127,6 +111,22 @@ Each app receives a **risk score (0–100)** and a **risk band** (Critical / Hig
 - Does **not** send data to any external service
 - Does **not** require persistent infrastructure or a deployed application
 - Does **not** store credentials — authentication uses Microsoft's device code flow
+
+---
+
+## How It Compares
+
+Other tools exist in this space. Here is an honest look at where Enterprise-Zapp fits:
+
+| Tool | Focus | Notes |
+|------|-------|-------|
+| **Entra ID portal (native)** | General tenant management | App hygiene information exists but is scattered across multiple blades. No consolidated risk view, no exportable report. |
+| **Maester** | Entra configuration compliance | Excellent open source PowerShell framework for testing configuration drift against known baselines. Different focus than app inventory and risk scoring. |
+| **AzureHound / BloodHound** | Attack path analysis | Heavier to run, different use case. Useful for understanding attack paths, not for app hygiene inventory. |
+| **Commercial SSPM tools** (AppOmni, Obsidian, Varonis, etc.) | Full SaaS security posture | Do this well and more. Require vendor relationships and significant budget. Enterprise-Zapp is a free alternative for teams that need visibility without a procurement process. |
+| **Enterprise-Zapp** | App and service principal hygiene | Lightweight, free, Python-based. Risk-rated inventory with a shareable HTML report, focused specifically on Entra app sprawl. |
+
+If you are already running a commercial SSPM that covers Entra, Enterprise-Zapp is probably redundant. If you are not, it fills a gap that does not have a clean free alternative.
 
 ---
 
@@ -346,40 +346,6 @@ However, the **person authenticating** needs an Entra ID account in the tenant. 
 
 ---
 
-## Project Structure
-
-```
-enterprise-zapp/
-├── setup.ps1                  # PowerShell: create/delete temp app registration
-├── src/
-│   ├── auth.py                # MSAL device code authentication
-│   ├── graph.py               # Graph API client (pagination, retry, rate limiting)
-│   ├── collector.py           # Data collection orchestration
-│   ├── analyzer.py            # Signal evaluation + risk scoring engine
-│   ├── ca_analyzer.py         # Conditional Access coverage analysis
-│   ├── reporter.py            # HTML / CSV / PDF generation
-│   └── cli.py                 # Click CLI entrypoint + banner
-├── templates/
-│   └── report.html.j2         # Self-contained Jinja2 HTML report template
-├── tests/
-│   ├── test_analyzer.py       # Unit tests (no network calls)
-│   └── fixtures/              # Sample data for tests
-├── requirements.txt
-├── pyproject.toml
-└── LICENSE                    # MIT
-```
-
----
-
-## Running Tests
-
-```bash
-pip install pytest
-pytest tests/ -v
-```
-
----
-
 ## Frequently Asked Questions
 
 **Does this require a persistent app registration?**
@@ -414,10 +380,37 @@ This re-renders the full report from the previously collected data — no API ca
 
 ---
 
-## Author
+## Project Structure
 
-**Scott Altiparmak**
-[linkedin.com/in/scottaltiparmak](https://www.linkedin.com/in/scottaltiparmak/)
+```
+enterprise-zapp/
+├── setup.ps1                  # PowerShell: create/delete temp app registration
+├── src/
+│   ├── auth.py                # MSAL device code authentication
+│   ├── graph.py               # Graph API client (pagination, retry, rate limiting)
+│   ├── collector.py           # Data collection orchestration
+│   ├── analyzer.py            # Signal evaluation + risk scoring engine
+│   ├── ca_analyzer.py         # Conditional Access coverage analysis
+│   ├── reporter.py            # HTML / CSV / PDF generation
+│   └── cli.py                 # Click CLI entrypoint + banner
+├── templates/
+│   └── report.html.j2         # Self-contained Jinja2 HTML report template
+├── tests/
+│   ├── test_analyzer.py       # Unit tests (no network calls)
+│   └── fixtures/              # Sample data for tests
+├── requirements.txt
+├── pyproject.toml
+└── LICENSE                    # MIT
+```
+
+---
+
+## Running Tests
+
+```bash
+pip install pytest
+pytest tests/ -v
+```
 
 ---
 
@@ -427,6 +420,13 @@ Contributions are welcome. Please open an issue before submitting a large pull r
 
 - Bug reports: [GitHub Issues](https://github.com/scottalt/Enterprise-Zapp/issues)
 - Feature requests: open an issue with the `enhancement` label
+
+---
+
+## Author
+
+**Scott Altiparmak**
+[linkedin.com/in/scottaltiparmak](https://www.linkedin.com/in/scottaltiparmak/)
 
 ---
 
