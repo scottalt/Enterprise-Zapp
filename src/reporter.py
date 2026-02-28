@@ -102,7 +102,9 @@ def _top_recommendations(results: list[AppResult]) -> list[dict]:
                    "abandoned apps or missed rotation cycles.",
         })
 
-    orphaned = sum(1 for r in results if r.owner_count == 0)
+    # Exclude Microsoft first-party apps — ownership is managed by Microsoft
+    # and cannot be meaningfully assigned by tenant admins.
+    orphaned = sum(1 for r in results if r.owner_count == 0 and not r.is_microsoft_first_party)
     if orphaned > 0:
         recs.append({
             "text": f"Assign owners to {orphaned} ownerless app(s)",

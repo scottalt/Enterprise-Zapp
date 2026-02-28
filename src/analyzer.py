@@ -20,8 +20,15 @@ DEFAULT_STALE_DAYS = 90
 NEAR_EXPIRY_DAYS = 30
 NEAR_EXPIRY_WARN_DAYS = 90
 
-# Microsoft's well-known tenant ID — used to identify Microsoft first-party apps
-MICROSOFT_TENANT_ID = "f8cdef31-a31e-4b4a-93e4-5f571e91255a"
+# Microsoft's well-known tenant IDs — used to identify Microsoft first-party apps.
+# Multiple Microsoft internal tenants publish service principals; all are treated
+# as first-party so we suppress non-actionable ownership/staleness signals.
+MICROSOFT_TENANT_IDS: frozenset[str] = frozenset({
+    "f8cdef31-a31e-4b4a-93e4-5f571e91255a",  # Microsoft Services (primary)
+    "47df5bb7-e6bc-4256-afb0-dd8c8e3c1ce8",  # Microsoft Azure AD Domain Services
+    "cdc5aeea-15c5-4db6-b079-fcadd2505dc2",  # Microsoft developer tools (Graph CLI, etc.)
+    "72f988bf-86f1-41af-91ab-2d7cd011db47",  # Microsoft Corporation (Azure tenant)
+})
 
 # Application permission IDs that are considered high-privilege
 # (Microsoft Graph well-known role IDs)
@@ -241,7 +248,7 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
 
     # ── Classification flags ───────────────────────────────────────────────
     is_microsoft_first_party = (
-        sp.get("appOwnerOrganizationId") == MICROSOFT_TENANT_ID
+        sp.get("appOwnerOrganizationId") in MICROSOFT_TENANT_IDS
     )
     is_tool_artifact = display_name.startswith("Enterprise-Zapp-Scan-")
 
