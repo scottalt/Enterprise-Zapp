@@ -61,7 +61,12 @@ function Write-Banner {
     Write-Host "  ██╔══╝   ██║╚████║    ██║    ██╔══╝   ██╔══██╗ ██╔═══╝ ██║ ╚════██║ ██╔══╝  " -ForegroundColor Cyan
     Write-Host "  ███████╗ ██║ ╚███║    ██║    ███████╗ ██║  ██║ ██║     ██║ ███████║ ███████╗" -ForegroundColor Cyan
     Write-Host "  ╚══════╝ ╚═╝  ╚══╝    ╚═╝    ╚══════╝ ╚═╝  ╚═╝ ╚═╝     ╚═╝ ╚══════╝ ╚══════╝" -ForegroundColor Cyan
-    Write-Host "                              Z A P P" -ForegroundColor Yellow
+    Write-Host "                     ███████╗  █████╗  ██████╗  ██████╗ " -ForegroundColor Green
+    Write-Host "                     ╚════██║ ██╔══██╗ ██╔══██╗ ██╔══██╗" -ForegroundColor Green
+    Write-Host "                         ██╔╝ ███████║ ██████╔╝ ██████╔╝" -ForegroundColor Green
+    Write-Host "                        ██╔╝  ██╔══██║ ██╔═══╝  ██╔═══╝ " -ForegroundColor Green
+    Write-Host "                     ███████╗ ██║  ██║ ██║      ██║     " -ForegroundColor Green
+    Write-Host "                     ╚══════╝ ╚═╝  ╚═╝ ╚═╝      ╚═╝     " -ForegroundColor Green
     Write-Host ""
     if ($Mode -eq "Cleanup") {
         Write-Host "  Entra ID Enterprise App Hygiene Scanner — Cleanup" -ForegroundColor White
