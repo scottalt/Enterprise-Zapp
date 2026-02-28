@@ -7,7 +7,7 @@
 .DESCRIPTION
     This script:
     1. Connects to Microsoft Graph (requires Privileged Role Administrator or Global Administrator)
-    2. Creates an app registration named "Enterprise-Zapp-Scan-<date>"
+    2. Creates an app registration named "Enterprise-Zapp"
     3. Grants read-only admin consent for the required API permissions
     4. Saves the client_id and tenant_id to enterprise_zapp_config.json
 
@@ -38,7 +38,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $ConfigFile = Join-Path $PSScriptRoot "enterprise_zapp_config.json"
-$AppName = "Enterprise-Zapp-Scan-$(Get-Date -Format 'yyyy-MM-dd')"
+$AppName = "Enterprise-Zapp"
 
 # ── Required application permissions / app roles (Graph API) ─────────────────
 # IDs must be the appRole (application permission) GUIDs from the Microsoft
