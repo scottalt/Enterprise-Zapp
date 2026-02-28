@@ -40,6 +40,7 @@ dependencies = [
 
 [project.optional-dependencies]
 pdf = ["weasyprint>=61.0"]
+dev = ["pytest>=7.0", "pytest-cov>=4.0"]
 
 [project.scripts]
 enterprise-zapp = "src.cli:main"
@@ -56,4 +57,17 @@ include = ["src*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-v"
+addopts = "-v --cov=src --cov-report=term-missing"
+
+[tool.coverage.run]
+source = ["src"]
+omit = [
+    "src/auth.py",       # requires MSAL / device-code flow
+    "src/cli.py",        # requires live Graph API
+    "src/collector.py",  # requires live Graph API
+    "src/graph.py",      # requires live Graph API
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
