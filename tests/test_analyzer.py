@@ -53,7 +53,14 @@ def sample_sps():
 
 @pytest.fixture
 def healthy_app(sample_sps):
-    return sample_sps[0]  # "Healthy App"
+    from datetime import datetime, timezone, timedelta
+    app = dict(sample_sps[0])
+    app["_signInActivity"] = {
+        "lastSignInActivity": {
+            "lastSignInDateTime": (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
+        }
+    }
+    return app
 
 
 @pytest.fixture
@@ -468,6 +475,20 @@ class TestStaleDaysParameter:
         assert any(s.key == "stale" for s in result_tight.signals)
         assert not any(s.key == "stale" for s in result_loose.signals)
 
+    def test_not_stale_at_exact_boundary(self):
+        # Condition is strict `>`, so exactly stale_days ago is NOT stale.
+        stale_days = 90
+        sp = self._make_sp_with_last_signin(stale_days)
+        result = analyze_app(sp, stale_days=stale_days)
+        assert not any(s.key == "stale" for s in result.signals)
+
+    def test_stale_one_day_past_boundary(self):
+        # stale_days + 1 days ago IS stale.
+        stale_days = 90
+        sp = self._make_sp_with_last_signin(stale_days + 1)
+        result = analyze_app(sp, stale_days=stale_days)
+        assert any(s.key == "stale" for s in result.signals)
+
 
 # ── Owner signal mutual exclusivity ───────────────────────────────────────────
 
@@ -494,3 +515,234 @@ class TestOwnerSignals:
         has_disabled_2 = any(s.key == "disabled_owner" for s in result_disabled.signals)
         assert not has_no_owners_2
         assert has_disabled_2
+
+
+# ── Redirect URIs ──────────────────────────────────────────────────────────────
+
+
+class TestRedirectURI:
+    def test_localhost_redirect_flagged(self):
+        sp = {**BASE_SP, "replyUrls": ["http://localhost/callback"]}
+        result = analyze_app(sp)
+        assert result.has_wildcard_redirect
+        assert any(s.key == "wildcard_redirect_uri" for s in result.signals)
+
+    def test_wildcard_redirect_flagged(self):
+        sp = {**BASE_SP, "replyUrls": ["https://app.com/*"]}
+        result = analyze_app(sp)
+        assert result.has_wildcard_redirect
+        assert any(s.key == "wildcard_redirect_uri" for s in result.signals)
+
+    def test_no_reply_urls_with_credentials(self):
+        from datetime import datetime, timezone, timedelta
+        now = datetime.now(timezone.utc)
+        sp = {
+            **BASE_SP,
+            "replyUrls": [],
+            "passwordCredentials": [
+                {
+                    "keyId": "cred-1",
+                    "displayName": "test secret",
+                    "startDateTime": (now - timedelta(days=30)).isoformat(),
+                    "endDateTime": (now + timedelta(days=60)).isoformat(),
+                }
+            ],
+        }
+        result = analyze_app(sp)
+        assert result.has_no_reply_urls
+        assert any(s.key == "no_reply_urls" for s in result.signals)
+
+    def test_no_reply_urls_without_credentials(self):
+        # No creds, no replyUrls — should NOT fire no_reply_urls signal
+        sp = {**BASE_SP, "replyUrls": [], "passwordCredentials": [], "keyCredentials": []}
+        result = analyze_app(sp)
+        assert not result.has_no_reply_urls
+        assert not any(s.key == "no_reply_urls" for s in result.signals)
+
+    def test_clean_redirect_uri(self):
+        sp = {**BASE_SP, "replyUrls": ["https://app.contoso.com/callback"]}
+        result = analyze_app(sp)
+        assert not result.has_wildcard_redirect
+        assert not any(s.key == "wildcard_redirect_uri" for s in result.signals)
+
+
+# ── Delegated permissions ──────────────────────────────────────────────────────
+
+
+class TestDelegatedPermissions:
+    def test_excessive_delegated_non_stale(self):
+        from datetime import datetime, timezone, timedelta
+        recent = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
+        sp = {
+            **BASE_SP,
+            "_signInActivity": {
+                "lastSignInActivity": {"lastSignInDateTime": recent}
+            },
+            "_delegatedGrants": [
+                {"scope": "Directory.ReadWrite.All openid profile"}
+            ],
+        }
+        result = analyze_app(sp)
+        assert result.has_excessive_delegated
+        delegated_sigs = [s for s in result.signals if s.key == "excessive_delegated_permissions"]
+        assert len(delegated_sigs) == 1
+        assert delegated_sigs[0].severity == "high"
+
+    def test_excessive_delegated_stale(self):
+        from datetime import datetime, timezone, timedelta
+        stale = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+        sp = {
+            **BASE_SP,
+            "_signInActivity": {
+                "lastSignInActivity": {"lastSignInDateTime": stale}
+            },
+            "_delegatedGrants": [
+                {"scope": "Directory.ReadWrite.All"}
+            ],
+        }
+        result = analyze_app(sp, stale_days=90)
+        assert result.has_excessive_delegated
+        delegated_sigs = [s for s in result.signals if s.key == "excessive_delegated_permissions"]
+        assert len(delegated_sigs) == 1
+        assert delegated_sigs[0].severity == "critical"
+
+    def test_non_privileged_delegated_not_flagged(self):
+        sp = {
+            **BASE_SP,
+            "_delegatedGrants": [
+                {"scope": "User.Read openid profile email"}
+            ],
+        }
+        result = analyze_app(sp)
+        assert not result.has_excessive_delegated
+        assert not any(s.key == "excessive_delegated_permissions" for s in result.signals)
+
+
+# ── Implicit grant ─────────────────────────────────────────────────────────────
+
+
+class TestImplicitGrant:
+    def test_oauth2_allow_implicit_flow_flagged(self):
+        sp = {**BASE_SP, "oauth2AllowImplicitFlow": True}
+        result = analyze_app(sp)
+        assert result.has_implicit_grant
+        assert any(s.key == "implicit_grant_enabled" for s in result.signals)
+
+    def test_id_token_issuance_flagged(self):
+        sp = {**BASE_SP, "oauth2AllowIdTokenIssuance": True}
+        result = analyze_app(sp)
+        assert result.has_implicit_grant
+        assert any(s.key == "implicit_grant_enabled" for s in result.signals)
+
+    def test_no_implicit_grant_clean(self):
+        sp = {**BASE_SP, "oauth2AllowImplicitFlow": False, "oauth2AllowIdTokenIssuance": False}
+        result = analyze_app(sp)
+        assert not result.has_implicit_grant
+        assert not any(s.key == "implicit_grant_enabled" for s in result.signals)
+
+
+# ── Multi-tenant apps ──────────────────────────────────────────────────────────
+
+
+class TestMultiTenant:
+    def test_multi_tenant_medium(self):
+        sp = {**BASE_SP, "signInAudience": "AzureADMultipleOrgs"}
+        result = analyze_app(sp)
+        assert result.is_multi_tenant
+        multi_sigs = [s for s in result.signals if s.key == "multi_tenant_app"]
+        assert len(multi_sigs) == 1
+        assert multi_sigs[0].severity == "medium"
+
+    def test_multi_tenant_high_with_privileges(self):
+        # AzureADMultipleOrgs + a high-privilege app permission → high severity
+        sp = {
+            **BASE_SP,
+            "signInAudience": "AzureADMultipleOrgs",
+            "_appPermissions": [
+                {
+                    "appRoleId": "19dbc75e-c2e2-444c-a770-ec69d8559fc7",  # Directory.ReadWrite.All
+                    "resourceDisplayName": "Microsoft Graph",
+                }
+            ],
+        }
+        result = analyze_app(sp)
+        assert result.is_multi_tenant
+        assert result.has_high_privilege
+        multi_sigs = [s for s in result.signals if s.key == "multi_tenant_app"]
+        assert len(multi_sigs) == 1
+        assert multi_sigs[0].severity == "high"
+
+    def test_single_tenant_not_flagged(self):
+        sp = {**BASE_SP, "signInAudience": "AzureADMyOrg"}
+        result = analyze_app(sp)
+        assert not result.is_multi_tenant
+        assert not any(s.key == "multi_tenant_app" for s in result.signals)
+
+    def test_microsoft_first_party_multi_tenant_not_flagged(self):
+        # Microsoft-owned first-party apps are inherently multi-tenant — signal must NOT fire
+        sp = {
+            **BASE_SP,
+            "signInAudience": "AzureADMultipleOrgs",
+            "appOwnerOrganizationId": "f8cdef31-a31e-4b4a-93e4-5f571e91255a",
+        }
+        result = analyze_app(sp)
+        assert result.is_microsoft_first_party
+        assert not any(s.key == "multi_tenant_app" for s in result.signals)
+
+
+# ── Mixed credentials ──────────────────────────────────────────────────────────
+
+
+class TestMixedCredentials:
+    def _make_secret(self):
+        from datetime import datetime, timezone, timedelta
+        now = datetime.now(timezone.utc)
+        return {
+            "keyId": "secret-1",
+            "displayName": "Test Secret",
+            "startDateTime": (now - timedelta(days=30)).isoformat(),
+            "endDateTime": (now + timedelta(days=60)).isoformat(),
+        }
+
+    def _make_cert(self):
+        from datetime import datetime, timezone, timedelta
+        now = datetime.now(timezone.utc)
+        return {
+            "keyId": "cert-1",
+            "displayName": "Test Cert",
+            "startDateTime": (now - timedelta(days=30)).isoformat(),
+            "endDateTime": (now + timedelta(days=60)).isoformat(),
+        }
+
+    def test_mixed_credentials_flagged(self):
+        sp = {
+            **BASE_SP,
+            "replyUrls": ["https://app.contoso.com/callback"],
+            "passwordCredentials": [self._make_secret()],
+            "keyCredentials": [self._make_cert()],
+        }
+        result = analyze_app(sp)
+        assert result.has_mixed_credentials
+        assert any(s.key == "mixed_credential_types" for s in result.signals)
+
+    def test_only_secrets_not_mixed(self):
+        sp = {
+            **BASE_SP,
+            "replyUrls": ["https://app.contoso.com/callback"],
+            "passwordCredentials": [self._make_secret()],
+            "keyCredentials": [],
+        }
+        result = analyze_app(sp)
+        assert not result.has_mixed_credentials
+        assert not any(s.key == "mixed_credential_types" for s in result.signals)
+
+    def test_only_certs_not_mixed(self):
+        sp = {
+            **BASE_SP,
+            "replyUrls": ["https://app.contoso.com/callback"],
+            "passwordCredentials": [],
+            "keyCredentials": [self._make_cert()],
+        }
+        result = analyze_app(sp)
+        assert not result.has_mixed_credentials
+        assert not any(s.key == "mixed_credential_types" for s in result.signals)
