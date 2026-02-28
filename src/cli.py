@@ -22,6 +22,7 @@ from rich.table import Table
 from . import __version__
 from .analyzer import analyze_all, band_counts
 from .auth import get_token
+from .ca_analyzer import analyze_ca_coverage
 from .collector import collect
 from .graph import GraphClient
 from .reporter import WEASYPRINT_AVAILABLE, generate_all, _top_recommendations
@@ -154,6 +155,12 @@ def main(
     and produces an HTML + CSV + PDF hygiene report.
 
     Run setup.ps1 first to create the required app registration.
+
+    Exit codes:
+      0  All apps are clean or low risk only
+      1  At least one medium-risk app detected
+      2  At least one high-risk app detected
+      3  At least one critical-risk app detected
     """
     _scan_start = time.monotonic()
 
@@ -211,8 +218,12 @@ def main(
     # ── Analyze ─────────────────────────────────────────────────────────────
     console.print("\n[cyan]Analyzing apps...[/cyan]")
     results = analyze_all(raw_data, stale_days=stale_days)
+    ca_app_coverages, ca_policy_summaries = analyze_ca_coverage(
+        raw_data.get("ca_policies", []), raw_data.get("apps", [])
+    )
 
     total_scanned = len(results)
+    full_bands = band_counts(results)
     if filter_band != "all":
         band_order = ["clean", "low", "medium", "high", "critical"]
         min_idx = band_order.index(filter_band)
@@ -266,6 +277,8 @@ def main(
         skip_csv=(output_format not in ("all", "csv")),
         filter_band=filter_band,
         total_scanned=total_scanned,
+        ca_app_coverages=ca_app_coverages,
+        ca_policy_summaries=ca_policy_summaries,
     )
 
     # ── Final summary ────────────────────────────────────────────────────────
@@ -313,12 +326,13 @@ def main(
             "  [cyan].\\setup.ps1 -Cleanup[/cyan]"
         )
 
-    # Exit with meaningful code so pipelines can branch on severity
-    if bands["critical"] > 0:
+    # Exit with meaningful code so pipelines can branch on severity.
+    # Use full_bands (pre-filter) so --filter-band critical cannot suppress exit codes.
+    if full_bands["critical"] > 0:
         sys.exit(3)
-    elif bands["high"] > 0:
+    elif full_bands["high"] > 0:
         sys.exit(2)
-    elif bands["medium"] > 0:
+    elif full_bands["medium"] > 0:
         sys.exit(1)
     # else exit 0 (default)
 

@@ -21,7 +21,7 @@ from rich.console import Console
 
 from . import __version__
 from .analyzer import AppResult, band_counts
-from .ca_analyzer import analyze_ca_coverage
+from .ca_analyzer import AppCoverage, PolicySummary
 
 console = Console()
 
@@ -140,6 +140,8 @@ def generate_html(
     hide_microsoft: bool = False,
     filter_band: str = "all",
     total_scanned: int | None = None,
+    ca_app_coverages: list[AppCoverage] | None = None,
+    ca_policy_summaries: list[PolicySummary] | None = None,
 ) -> Path:
     """Render the HTML report and write to output_path."""
     env = _build_jinja_env()
@@ -180,12 +182,10 @@ def generate_html(
         collected_at = collected_at_raw
 
     # ── Conditional Access coverage ─────────────────────────────────────────
-    ca_policies_raw = raw_data.get("ca_policies", [])
     # ca_permission_granted distinguishes "no permission" from "zero policies configured"
     ca_permission_granted = raw_data.get("ca_permission_granted", False)
-    ca_app_coverages, ca_policy_summaries = analyze_ca_coverage(
-        ca_policies_raw, raw_data.get("apps", [])
-    )
+    ca_app_coverages = ca_app_coverages or []
+    ca_policy_summaries = ca_policy_summaries or []
     ca_available = ca_permission_granted
     if ca_available:
         covered_count = sum(1 for c in ca_app_coverages if c.is_covered)
@@ -323,7 +323,8 @@ def generate_pdf(html_path: Path, pdf_path: Path) -> Path | None:
 
     try:
         from weasyprint import HTML  # type: ignore
-        HTML(filename=str(html_path)).write_pdf(str(pdf_path))
+        html_content = html_path.read_text(encoding="utf-8")
+        HTML(string=html_content, base_url=str(html_path.parent)).write_pdf(str(pdf_path))
         return pdf_path
     except Exception as exc:
         console.print(f"[yellow]PDF generation failed: {exc}[/yellow]")
@@ -344,6 +345,8 @@ def generate_all(
     skip_csv: bool = False,
     filter_band: str = "all",
     total_scanned: int | None = None,
+    ca_app_coverages: list[AppCoverage] | None = None,
+    ca_policy_summaries: list[PolicySummary] | None = None,
 ) -> dict[str, Path | None]:
     """Generate HTML, CSV, and PDF reports. Returns dict of format → output path."""
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -366,6 +369,8 @@ def generate_all(
             hide_microsoft=hide_microsoft,
             filter_band=filter_band,
             total_scanned=total_scanned,
+            ca_app_coverages=ca_app_coverages,
+            ca_policy_summaries=ca_policy_summaries,
         )
         console.print(f"[green]HTML:[/green] {html_out}")
 
@@ -387,6 +392,8 @@ def generate_all(
                 hide_microsoft=hide_microsoft,
                 filter_band=filter_band,
                 total_scanned=total_scanned,
+                ca_app_coverages=ca_app_coverages,
+                ca_policy_summaries=ca_policy_summaries,
             )
             console.print("[cyan]Generating PDF export...[/cyan]")
             pdf_out = generate_pdf(html_out_tmp, pdf_path)
