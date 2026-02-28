@@ -136,8 +136,13 @@ function Remove-ExistingApp {
 
     $App = Get-MgApplication -Filter "appId eq '$ClientId'" -ErrorAction SilentlyContinue
     if ($App) {
-        Remove-MgApplication -ApplicationId $App.Id
-        Write-Host "[+] App registration '$($App.DisplayName)' deleted successfully." -ForegroundColor Green
+        try {
+            Remove-MgApplication -ApplicationId $App.Id -ErrorAction Stop
+            Write-Host "[+] App registration '$($App.DisplayName)' deleted successfully." -ForegroundColor Green
+        } catch {
+            Write-Host "[!] Failed to delete app registration '$($App.DisplayName)': $_" -ForegroundColor Red
+            Write-Host "[!] You may need the Application Administrator or Global Administrator role to delete app registrations." -ForegroundColor Yellow
+        }
     } else {
         Write-Host "[!] App with client ID $ClientId not found. It may have already been deleted." -ForegroundColor Yellow
     }
