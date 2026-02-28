@@ -69,6 +69,7 @@ class Signal:
     title: str
     detail: str
     score_contribution: int
+    recommendation: str = ""
 
 
 @dataclass
@@ -177,7 +178,7 @@ def _risk_band(score: int) -> str:
     return "clean"
 
 
-def _primary_recommendation(signals: list[Signal], account_enabled: bool) -> str:
+def _primary_recommendation(signals: list[Signal]) -> str:
     if not signals:
         return "No issues detected. Periodic review recommended."
 
@@ -193,17 +194,17 @@ def _primary_recommendation(signals: list[Signal], account_enabled: bool) -> str
     for sev in severity_order:
         for sig in active_signals:
             if sig.severity == sev:
-                return _recommendation_for_signal(sig.key, account_enabled)
+                return sig.recommendation or "Review and remediate flagged issues."
     return "Review flagged signals and remediate as appropriate."
 
 
-def _recommendation_for_signal(key: str, account_enabled: bool) -> str:
+def _recommendation_for_signal(key: str) -> str:
     recs = {
         "never_signed_in": "Review whether this app was ever needed. If not in use, disable then delete.",
         "stale": "Verify with the app owner whether this is still in use. If unused, disable and plan for removal.",
         "no_owners": "Assign at least two owners to this app to ensure accountability.",
-        "disabled_owner": "Update app ownership — current owners are disabled accounts.",
-        "no_assignments": "If this app requires user/group access, add assignments. Otherwise consider whether it is still needed.",
+        "disabled_owner": "Replace disabled account owners with active users. Apps without valid owners have no accountability for credential rotation, incident response, or decommissioning.",
+        "no_assignments": "Verify that assignment enforcement is enabled in the app's Enterprise Application settings. Without user/group assignments, any user in the tenant may be able to access this app. If the app is unused, disable or remove it.",
         "disabled_sp": "If the app is intentionally decommissioned, delete the service principal to reduce attack surface.",
         "expired_secret": "Rotate or remove expired client secrets immediately.",
         "expired_cert": "Rotate or remove expired certificates immediately.",
@@ -211,8 +212,8 @@ def _recommendation_for_signal(key: str, account_enabled: bool) -> str:
         "near_expiry_cert": "Rotate certificate before expiry to avoid service disruption.",
         "high_privilege_stale": "High-privilege app with no recent sign-in activity — investigate necessity and disable if unused.",
         "long_lived_secret": "Replace long-lived secrets with shorter-lived credentials to reduce breach impact.",
-        "expiry_warning_secret": "Client secret expiring in 30-90 days — schedule rotation now to avoid last-minute disruption.",
-        "expiry_warning_cert": "Certificate expiring in 30-90 days — schedule rotation now to avoid last-minute disruption.",
+        "expiry_warning_secret": "Client secret expiring in 30–90 days — schedule rotation now to avoid last-minute disruption.",
+        "expiry_warning_cert": "Certificate expiring in 30–90 days — schedule rotation now to avoid last-minute disruption.",
         "no_reply_urls": "This app has credentials but no redirect URIs configured. Verify it is an intentional service/daemon app. If not in use, consider removal.",
         "wildcard_redirect_uri": "Remove wildcard or localhost redirect URIs — these enable token theft via open redirect attacks.",
         "excessive_delegated_permissions": "Review and restrict delegated permissions. High-privilege delegated scopes grant broad access when users consent. Remove scopes not actively needed.",
@@ -250,7 +251,7 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
     is_microsoft_first_party = (
         sp.get("appOwnerOrganizationId") in MICROSOFT_TENANT_IDS
     )
-    is_tool_artifact = display_name.startswith("Enterprise-Zapp-Scan-")
+    is_tool_artifact = display_name == "Enterprise-Zapp"
 
     owners: list[dict] = sp.get("_owners", [])
     # _appPermissions = users/groups assigned TO this app (appRoleAssignedTo)
@@ -649,6 +650,10 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
             score_contribution=0,
         ))
 
+    # Attach per-signal recommendations
+    for sig in signals:
+        sig.recommendation = _recommendation_for_signal(sig.key)
+
     # Cap score at 100
     score = min(score, 100)
 
@@ -671,7 +676,7 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
         signals=signals,
         risk_score=score,
         risk_band=_risk_band(score),
-        primary_recommendation=_primary_recommendation(signals, account_enabled),
+        primary_recommendation=_primary_recommendation(signals),
         tags=sp.get("tags", []),
         is_microsoft_first_party=is_microsoft_first_party,
         is_tool_artifact=is_tool_artifact,

@@ -365,6 +365,18 @@
     line-height: 1.5;
     font-style: italic;
   }
+  .signal-block {
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+  .signal-block:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+  .signal-rec-text {
+    font-size: 12px;
+    color: #7dd3fc;
+    margin-top: 5px;
+    line-height: 1.5;
+  }
 
   /* ── Muted empty-state cell ──────────────────────────────────────────── */
   td.muted { color: var(--muted); font-style: italic; text-align: center; padding: 20px 14px; }
@@ -642,17 +654,13 @@
           <tr class="expand-row" id="crit-{{ loop.index }}">
             <td colspan="7">
               <div class="expand-content">
-                <div class="signals">
-                  {% for sig in app.signals %}
-                  <span class="signal-chip signal-{{ sig.severity }}" title="{{ sig.detail }}">{{ sig.title }}</span>
-                  {% endfor %}
-                </div>
                 {% for sig in app.signals %}
-                {% if sig.detail %}
-                <p class="signal-detail-text">{{ sig.detail }}</p>
-                {% endif %}
+                <div class="signal-block">
+                  <span class="signal-chip signal-{{ sig.severity }}">{{ sig.title }}</span>
+                  {% if sig.detail %}<p class="signal-detail-text">{{ sig.detail }}</p>{% endif %}
+                  {% if sig.recommendation %}<p class="signal-rec-text">→ {{ sig.recommendation }}</p>{% endif %}
+                </div>
                 {% endfor %}
-                <div class="rec-box"><strong>Recommendation:</strong> {{ app.primary_recommendation }}</div>
               </div>
             </td>
           </tr>
@@ -695,17 +703,13 @@
           <tr class="expand-row" id="stale-{{ loop.index }}">
             <td colspan="6">
               <div class="expand-content">
-                <div class="signals">
-                  {% for sig in app.signals %}
-                  <span class="signal-chip signal-{{ sig.severity }}" title="{{ sig.detail }}">{{ sig.title }}</span>
-                  {% endfor %}
-                </div>
                 {% for sig in app.signals %}
-                {% if sig.detail %}
-                <p class="signal-detail-text">{{ sig.detail }}</p>
-                {% endif %}
+                <div class="signal-block">
+                  <span class="signal-chip signal-{{ sig.severity }}">{{ sig.title }}</span>
+                  {% if sig.detail %}<p class="signal-detail-text">{{ sig.detail }}</p>{% endif %}
+                  {% if sig.recommendation %}<p class="signal-rec-text">→ {{ sig.recommendation }}</p>{% endif %}
+                </div>
                 {% endfor %}
-                <div class="rec-box"><strong>Recommendation:</strong> {{ app.primary_recommendation }}</div>
               </div>
             </td>
           </tr>
@@ -760,17 +764,13 @@
           <tr class="expand-row" id="cred-{{ loop.index }}">
             <td colspan="8">
               <div class="expand-content">
-                <div class="signals">
-                  {% for sig in app.signals %}
-                  <span class="signal-chip signal-{{ sig.severity }}" title="{{ sig.detail }}">{{ sig.title }}</span>
-                  {% endfor %}
-                </div>
                 {% for sig in app.signals %}
-                {% if sig.detail %}
-                <p class="signal-detail-text">{{ sig.detail }}</p>
-                {% endif %}
+                <div class="signal-block">
+                  <span class="signal-chip signal-{{ sig.severity }}">{{ sig.title }}</span>
+                  {% if sig.detail %}<p class="signal-detail-text">{{ sig.detail }}</p>{% endif %}
+                  {% if sig.recommendation %}<p class="signal-rec-text">→ {{ sig.recommendation }}</p>{% endif %}
+                </div>
                 {% endfor %}
-                <div class="rec-box"><strong>Recommendation:</strong> {{ app.primary_recommendation }}</div>
               </div>
             </td>
           </tr>
@@ -811,17 +811,13 @@
           <tr class="expand-row" id="orphan-{{ loop.index }}">
             <td colspan="5">
               <div class="expand-content">
-                <div class="signals">
-                  {% for sig in app.signals %}
-                  <span class="signal-chip signal-{{ sig.severity }}" title="{{ sig.detail }}">{{ sig.title }}</span>
-                  {% endfor %}
-                </div>
                 {% for sig in app.signals %}
-                {% if sig.detail %}
-                <p class="signal-detail-text">{{ sig.detail }}</p>
-                {% endif %}
+                <div class="signal-block">
+                  <span class="signal-chip signal-{{ sig.severity }}">{{ sig.title }}</span>
+                  {% if sig.detail %}<p class="signal-detail-text">{{ sig.detail }}</p>{% endif %}
+                  {% if sig.recommendation %}<p class="signal-rec-text">→ {{ sig.recommendation }}</p>{% endif %}
+                </div>
                 {% endfor %}
-                <div class="rec-box"><strong>Recommendation:</strong> {{ app.primary_recommendation }}</div>
               </div>
             </td>
           </tr>
@@ -860,17 +856,13 @@
           <tr class="expand-row" id="priv-{{ loop.index }}">
             <td colspan="4">
               <div class="expand-content">
-                <div class="signals">
-                  {% for sig in app.signals %}
-                  <span class="signal-chip signal-{{ sig.severity }}" title="{{ sig.detail }}">{{ sig.title }}</span>
-                  {% endfor %}
-                </div>
                 {% for sig in app.signals %}
-                {% if sig.detail %}
-                <p class="signal-detail-text">{{ sig.detail }}</p>
-                {% endif %}
+                <div class="signal-block">
+                  <span class="signal-chip signal-{{ sig.severity }}">{{ sig.title }}</span>
+                  {% if sig.detail %}<p class="signal-detail-text">{{ sig.detail }}</p>{% endif %}
+                  {% if sig.recommendation %}<p class="signal-rec-text">→ {{ sig.recommendation }}</p>{% endif %}
+                </div>
                 {% endfor %}
-                <div class="rec-box"><strong>Recommendation:</strong> {{ app.primary_recommendation }}</div>
               </div>
             </td>
           </tr>

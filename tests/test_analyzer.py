@@ -430,7 +430,7 @@ class TestMicrosoftFirstParty:
 
 class TestToolArtifact:
     def test_tool_artifact_detected(self):
-        sp = {**BASE_SP, "displayName": "Enterprise-Zapp-Scan-2026-01-01"}
+        sp = {**BASE_SP, "displayName": "Enterprise-Zapp"}
         result = analyze_app(sp)
         assert result.is_tool_artifact
         assert any(s.key == "tool_artifact" for s in result.signals)
