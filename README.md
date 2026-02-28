@@ -98,6 +98,8 @@ Enterprise-Zapp scans your Microsoft Entra ID tenant for enterprise app hygiene 
 
 Each app receives a **risk score (0–100)** and a **risk band** (Critical / High / Medium / Low / Clean), with a prioritised primary recommendation.
 
+> **What counts as "high-privilege"?** Enterprise-Zapp considers a permission high-privilege if it grants broad write or administrative access to the tenant or its data. Examples include: `Directory.ReadWrite.All`, `User.ReadWrite.All`, `Mail.ReadWrite`, `Files.ReadWrite.All`, `RoleManagement.ReadWrite.Directory`, `Application.ReadWrite.All`, `GroupMember.ReadWrite.All`, and similar `*.ReadWrite.All` scopes. Read-only variants of these permissions (e.g. `User.Read.All`) are not treated as high-privilege.
+
 ---
 
 ## What It Does NOT Do
@@ -119,10 +121,18 @@ Each app receives a **risk score (0–100)** and a **risk band** (Critical / Hig
 | **Privileged Role Administrator** (or Global Administrator) | Required to run `setup.ps1` and grant admin consent |
 | **Security Reader** | Minimum role to authenticate and run the scan |
 | Python 3.10+ | For the scan tool |
+| WeasyPrint native libraries (optional) | Required only for PDF output. WeasyPrint depends on GTK3/Pango/Cairo native libraries. **On Windows these are typically unavailable** — use `--skip-pdf` or print from browser (Ctrl+P → Save as PDF). On macOS/Linux install via your package manager first (e.g. `brew install pango` on macOS, `apt install libpango-1.0-0` on Debian/Ubuntu). |
 
 ---
 
 ## Quick Start
+
+### Step 0 — Clone the repository
+
+```bash
+git clone https://github.com/scottalt/Enterprise-Zapp.git
+cd Enterprise-Zapp
+```
 
 ### Step 1 — Create the temporary app registration
 
@@ -186,7 +196,7 @@ Usage: enterprise-zapp [OPTIONS]
 Options:
   -t, --tenant TENANT_ID           Entra tenant ID or domain. Reads from config if omitted.
   -c, --client-id CLIENT_ID        Azure app registration client ID. Reads from config if omitted.
-  --config PATH                    Path to enterprise_zapp_config.json.
+  --config PATH                    Path to enterprise_zapp_config.json. [default: ./enterprise_zapp_config.json]
   --stale-days DAYS                Days without sign-in before an app is stale. [default: 90]
   -o, --output DIR                 Output directory for reports. [default: ./output]
   --from-cache CACHE_FILE          Re-use collected data without re-querying Graph API.
@@ -197,11 +207,24 @@ Options:
   --filter-band [all|critical|high|medium|low|clean]
                                    Only include apps at or above this risk band. [default: all]
   --skip-pdf                       Skip PDF generation.
-  --quiet                          Suppress banner and decorative output.
+  --quiet                          Suppress banner, disclaimer, and decorative output. Only print errors and output paths.
   --json-output                    Print a structured JSON summary to stdout after the scan.
   -V, --version                    Show version.
   --help                           Show help.
 ```
+
+### Exit Codes
+
+Enterprise-Zapp exits with a meaningful code so pipelines can branch on severity:
+
+| Code | Meaning |
+|------|---------|
+| `0` | No apps above Medium risk (all apps are Low or Clean) |
+| `1` | At least one Medium-risk app found |
+| `2` | At least one High-risk app found |
+| `3` | At least one Critical-risk app found |
+
+This makes Enterprise-Zapp easy to integrate into CI/CD pipelines — for example, fail a pipeline stage if any Critical or High risk apps are detected.
 
 ### Examples
 
@@ -216,7 +239,7 @@ enterprise-zapp --hide-microsoft
 enterprise-zapp --stale-days 60
 
 # Re-generate the report from cached data — instant, no auth or API calls
-enterprise-zapp --from-cache ./output/raw_contoso_2026-02-27.json
+enterprise-zapp --from-cache ./output/raw_contoso_<date>.json
 
 # Write reports to a custom folder
 enterprise-zapp --output ./reports/q1-audit/
@@ -229,6 +252,23 @@ enterprise-zapp --output-format html
 
 # CI/CD-friendly: quiet output + JSON summary to stdout
 enterprise-zapp --quiet --json-output
+```
+
+**`--json-output` schema** — the JSON printed to stdout has the following structure:
+
+```json
+{
+  "tenant": "Contoso",
+  "scanned_at": "2026-02-27T10:00:00+00:00",
+  "total_apps": 67,
+  "filtered_to": "all",
+  "bands": { "critical": 0, "high": 2, "medium": 45, "low": 3, "clean": 17 },
+  "outputs": {
+    "html": "./output/enterprise_zapp_contoso_2026-02-27.html",
+    "csv": "./output/enterprise_zapp_contoso_2026-02-27.csv",
+    "pdf": null
+  }
+}
 ```
 
 ---
@@ -344,6 +384,15 @@ Microsoft first-party apps (Teams, SharePoint, Viva, etc.) are service principal
 
 **The Conditional Access section is missing from my report.**
 The CA coverage analysis requires the `Policy.Read.All` permission. If `setup.ps1` was run before this permission was added, re-run it to update the app registration and re-consent. If you intentionally skipped this permission, the section is hidden and all other signals are unaffected.
+
+**My scan was interrupted before the report was generated — do I need to re-authenticate?**
+No. If a `raw_<tenant>_<date>.json` file already exists in `./output/`, you can recover without re-authenticating. Simply re-run with `--from-cache`:
+
+```bash
+enterprise-zapp --from-cache ./output/raw_<tenant>_<date>.json
+```
+
+This re-renders the full report from the previously collected data — no API calls and no device code prompt required.
 
 ---
 
