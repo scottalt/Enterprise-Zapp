@@ -362,37 +362,33 @@ class TestGenerateHtml:
 
 class TestGenerateAll:
     def test_skip_html_returns_none(self, tmp_path):
-        result = generate_all([], RAW_DATA_BASE, 90, tmp_path, skip_html=True, skip_pdf=True)
+        result = generate_all([], RAW_DATA_BASE, 90, tmp_path, skip_html=True)
         assert result["html"] is None
         assert result["csv"] is not None
 
     def test_skip_csv_returns_none(self, tmp_path):
-        result = generate_all([], RAW_DATA_BASE, 90, tmp_path, skip_csv=True, skip_pdf=True)
+        result = generate_all([], RAW_DATA_BASE, 90, tmp_path, skip_csv=True)
         assert result["csv"] is None
         assert result["html"] is not None
-
-    def test_skip_pdf_returns_none(self, tmp_path):
-        result = generate_all([], RAW_DATA_BASE, 90, tmp_path, skip_pdf=True)
-        assert result["pdf"] is None
 
     def test_skip_all_returns_all_none(self, tmp_path):
         result = generate_all(
             [], RAW_DATA_BASE, 90, tmp_path,
-            skip_html=True, skip_csv=True, skip_pdf=True,
+            skip_html=True, skip_csv=True,
         )
-        assert result == {"html": None, "csv": None, "pdf": None}
+        assert result == {"html": None, "csv": None}
 
     def test_output_dir_created(self, tmp_path):
         new_dir = tmp_path / "reports" / "nested"
-        generate_all([], RAW_DATA_BASE, 90, new_dir, skip_pdf=True)
+        generate_all([], RAW_DATA_BASE, 90, new_dir)
         assert new_dir.exists()
 
     def test_filename_contains_tenant_slug(self, tmp_path):
-        result = generate_all([], RAW_DATA_BASE, 90, tmp_path, skip_pdf=True)
+        result = generate_all([], RAW_DATA_BASE, 90, tmp_path)
         assert result["html"] is not None
         assert "contoso_ltd" in result["html"].name
 
     def test_html_and_csv_written_to_disk(self, tmp_path):
-        result = generate_all([], RAW_DATA_BASE, 90, tmp_path, skip_pdf=True)
+        result = generate_all([], RAW_DATA_BASE, 90, tmp_path)
         assert result["html"].exists()
         assert result["csv"].exists()

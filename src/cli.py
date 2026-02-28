@@ -25,7 +25,7 @@ from .auth import get_token
 from .ca_analyzer import analyze_ca_coverage
 from .collector import collect
 from .graph import GraphClient
-from .reporter import WEASYPRINT_AVAILABLE, generate_all, _top_recommendations
+from .reporter import generate_all, _top_recommendations
 
 console = Console()
 
@@ -94,12 +94,6 @@ BANNER = f"""[bold]
     help="Re-use a previously collected raw JSON data file. Skips Graph API calls.",
 )
 @click.option(
-    "--skip-pdf",
-    is_flag=True,
-    default=False,
-    help="Skip PDF generation (useful if weasyprint is not installed).",
-)
-@click.option(
     "--hide-microsoft/--show-microsoft",
     default=False,
     show_default=True,
@@ -109,7 +103,7 @@ BANNER = f"""[bold]
     "--output-format",
     default="all",
     show_default=True,
-    type=click.Choice(["all", "html", "csv", "pdf"], case_sensitive=False),
+    type=click.Choice(["all", "html", "csv"], case_sensitive=False),
     help="Report format(s) to generate.",
 )
 @click.option(
@@ -140,7 +134,6 @@ def main(
     stale_days: int,
     output: Path,
     from_cache: Path | None,
-    skip_pdf: bool,
     hide_microsoft: bool,
     output_format: str,
     filter_band: str,
@@ -264,17 +257,9 @@ def main(
     console.print("\n[cyan]Generating reports...[/cyan]")
     output_dir = Path(output)
 
-    want_pdf = (output_format in ("all", "pdf")) and not skip_pdf
-    if want_pdf and not WEASYPRINT_AVAILABLE:
-        console.print(
-            "[yellow]PDF generation skipped — weasyprint native libraries are not available on this system.[/yellow]\n"
-            "[dim]Tip: Open the HTML report in your browser and use Ctrl+P → Save as PDF instead.[/dim]"
-        )
-
     outputs = generate_all(
         results, raw_data, stale_days, output_dir,
         hide_microsoft=hide_microsoft,
-        skip_pdf=(output_format not in ("all", "pdf")) or skip_pdf or not WEASYPRINT_AVAILABLE,
         skip_html=(output_format not in ("all", "html")),
         skip_csv=(output_format not in ("all", "csv")),
         filter_band=filter_band,
@@ -295,7 +280,7 @@ def main(
                     "",
                     f"[bold]HTML:[/bold] {outputs.get('html', '—')}",
                     f"[bold]CSV: [/bold] {outputs.get('csv', '—')}",
-                    f"[bold]PDF: [/bold] {outputs.get('pdf') or 'skipped'}",
+                    "[dim]PDF: open the HTML report in your browser and use Ctrl+P → Save as PDF[/dim]",
                     "",
                     f"[dim]Total apps: {len(results)} · "
                     f"Critical: {bands['critical']} · High: {bands['high']} · "

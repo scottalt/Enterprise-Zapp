@@ -4,7 +4,6 @@ Report generation for Enterprise-Zapp.
 Produces:
   - Self-contained HTML report (inline CSS/JS, works offline)
   - CSV export (one row per app)
-  - PDF export (rendered from the HTML template via weasyprint)
 """
 
 from __future__ import annotations
@@ -26,29 +25,6 @@ from .ca_analyzer import AppCoverage, PolicySummary
 console = Console()
 
 TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
-
-
-# ── WeasyPrint availability probe ───────────────────────────────────────────────
-# Test once at import time so every caller gets a consistent answer without
-# risking a crash deep inside report generation.
-
-def _probe_weasyprint() -> tuple[bool, str]:
-    """Return (available, reason_if_not)."""
-    try:
-        from weasyprint import HTML  # noqa: F401  # type: ignore
-        return True, ""
-    except ImportError:
-        return False, "weasyprint is not installed. Run: pip install weasyprint"
-    except Exception as exc:
-        # Native libraries (Pango/GTK/Cairo) missing — common on Windows.
-        return False, (
-            f"weasyprint is installed but its native libraries (Pango/GTK) could not load: {exc}\n"
-            "On Windows, install the GTK3 runtime or use --skip-pdf to skip PDF generation.\n"
-            "The HTML report prints cleanly from any browser (Ctrl+P → Save as PDF)."
-        )
-
-
-WEASYPRINT_AVAILABLE, _WEASYPRINT_REASON = _probe_weasyprint()
 
 
 # ── Jinja2 filters ─────────────────────────────────────────────────────────────
@@ -319,25 +295,6 @@ def generate_csv(results: list[AppResult], output_path: Path) -> Path:
     return output_path
 
 
-# ── PDF export ─────────────────────────────────────────────────────────────────
-
-
-def generate_pdf(html_path: Path, pdf_path: Path) -> Path | None:
-    """Render PDF from the HTML report. Returns path on success, None if weasyprint unavailable."""
-    if not WEASYPRINT_AVAILABLE:
-        console.print(f"[yellow]PDF skipped — {_WEASYPRINT_REASON}[/yellow]")
-        return None
-
-    try:
-        from weasyprint import HTML  # type: ignore
-        html_content = html_path.read_text(encoding="utf-8")
-        HTML(string=html_content, base_url=str(html_path.parent)).write_pdf(str(pdf_path))
-        return pdf_path
-    except Exception as exc:
-        console.print(f"[yellow]PDF generation failed: {exc}[/yellow]")
-        return None
-
-
 # ── Orchestrator ───────────────────────────────────────────────────────────────
 
 
@@ -347,7 +304,6 @@ def generate_all(
     stale_days: int,
     output_dir: Path,
     hide_microsoft: bool = False,
-    skip_pdf: bool = False,
     skip_html: bool = False,
     skip_csv: bool = False,
     filter_band: str = "all",
@@ -355,7 +311,7 @@ def generate_all(
     ca_app_coverages: list[AppCoverage] | None = None,
     ca_policy_summaries: list[PolicySummary] | None = None,
 ) -> dict[str, Path | None]:
-    """Generate HTML, CSV, and PDF reports. Returns dict of format → output path."""
+    """Generate HTML and CSV reports. Returns dict of format → output path."""
     output_dir.mkdir(parents=True, exist_ok=True)
 
     tenant = raw_data.get("tenant", {})
@@ -365,7 +321,6 @@ def generate_all(
 
     html_path = Path(str(base) + ".html")
     csv_path = Path(str(base) + ".csv")
-    pdf_path = Path(str(base) + ".pdf")
 
     if skip_html:
         html_out = None
@@ -388,26 +343,4 @@ def generate_all(
         csv_out = generate_csv(results, csv_path)
         console.print(f"[green]CSV: [/green] {csv_out}")
 
-    if skip_pdf:
-        pdf_out = None
-    else:
-        if html_out is None:
-            # PDF requires HTML; generate HTML temporarily if it was skipped
-            console.print("[cyan]Generating HTML (required for PDF)...[/cyan]")
-            html_out_tmp = generate_html(
-                results, raw_data, stale_days, html_path,
-                hide_microsoft=hide_microsoft,
-                filter_band=filter_band,
-                total_scanned=total_scanned,
-                ca_app_coverages=ca_app_coverages,
-                ca_policy_summaries=ca_policy_summaries,
-            )
-            console.print("[cyan]Generating PDF export...[/cyan]")
-            pdf_out = generate_pdf(html_out_tmp, pdf_path)
-        else:
-            console.print("[cyan]Generating PDF export...[/cyan]")
-            pdf_out = generate_pdf(html_out, pdf_path)
-        if pdf_out:
-            console.print(f"[green]PDF: [/green] {pdf_out}")
-
-    return {"html": html_out, "csv": csv_out, "pdf": pdf_out}
+    return {"html": html_out, "csv": csv_out}

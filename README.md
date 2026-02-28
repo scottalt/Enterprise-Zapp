@@ -145,7 +145,6 @@ If you are already running a commercial SSPM that covers Entra, Enterprise-Zapp 
 | **Privileged Role Administrator** (or Global Administrator) | Required to run `setup.ps1` and grant admin consent |
 | **Security Reader** | Minimum role to authenticate and run the scan |
 | Python 3.10+ | For the scan tool |
-| WeasyPrint native libraries (optional) | Required only for PDF output. WeasyPrint depends on GTK3/Pango/Cairo native libraries. **On Windows these are typically unavailable** — use `--skip-pdf` or print from browser (Ctrl+P → Save as PDF). On macOS/Linux install via your package manager first (e.g. `brew install pango` on macOS, `apt install libpango-1.0-0` on Debian/Ubuntu). |
 
 ---
 
@@ -228,11 +227,10 @@ Options:
   --from-cache CACHE_FILE          Re-use collected data without re-querying Graph API.
   --hide-microsoft / --show-microsoft
                                    Exclude Microsoft first-party apps from the report.
-  --output-format [all|html|csv|pdf]
+  --output-format [all|html|csv]
                                    Report format(s) to generate. [default: all]
   --filter-band [all|critical|high|medium|low|clean]
                                    Only include apps at or above this risk band. [default: all]
-  --skip-pdf                       Skip PDF generation.
   --quiet                          Suppress banner, disclaimer, and decorative output. Only print errors and output paths.
   --json-output                    Print a structured JSON summary to stdout after the scan.
   -V, --version                    Show version.
@@ -291,8 +289,7 @@ enterprise-zapp --quiet --json-output
   "bands": { "critical": 0, "high": 2, "medium": 45, "low": 3, "clean": 17 },
   "outputs": {
     "html": "./output/enterprise_zapp_contoso_2026-02-27.html",
-    "csv": "./output/enterprise_zapp_contoso_2026-02-27.csv",
-    "pdf": null
+    "csv": "./output/enterprise_zapp_contoso_2026-02-27.csv"
   }
 }
 ```
@@ -303,9 +300,8 @@ enterprise-zapp --quiet --json-output
 
 | File | Description |
 |------|-------------|
-| `enterprise_zapp_<tenant>_<date>.html` | Self-contained HTML report — works offline, no CDN |
+| `enterprise_zapp_<tenant>_<date>.html` | Self-contained HTML report — works offline, no CDN. Open in any browser and use Ctrl+P → Save as PDF to produce a PDF. |
 | `enterprise_zapp_<tenant>_<date>.csv` | Flat CSV for Excel, Power BI, or ticketing systems |
-| `enterprise_zapp_<tenant>_<date>.pdf` | PDF for audit delivery or executive review |
 | `raw_<tenant>_<date>.json` | Raw collected data — use with `--from-cache` to re-run reports instantly |
 
 ---

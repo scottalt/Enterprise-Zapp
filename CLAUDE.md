@@ -19,7 +19,7 @@ pytest tests/test_analyzer.py::TestRiskBand -v
 pytest tests/test_analyzer.py::TestExpiredSecret::test_expired_secret_detected -v
 ```
 
-PDF generation requires weasyprint with native GTK3/Pango/Cairo libraries. On Windows, these are typically unavailable — use `--skip-pdf` or print to PDF from the browser instead.
+PDF generation is not built in. Open the HTML report in any browser and use Ctrl+P → Save as PDF.
 
 ## Architecture
 
@@ -57,7 +57,7 @@ ca_analyzer.py  Conditional Access cross-reference. analyze_ca_coverage() maps
                 CA policies to apps, determining which are covered by at least
                 one enforced policy. Called inside reporter.py before HTML render.
 
-reporter.py     Jinja2 HTML template rendering, CSV export, and WeasyPrint PDF.
+reporter.py     Jinja2 HTML template rendering and CSV export.
                 generate_all() is the main orchestrator. The HTML report is
                 fully self-contained (inline CSS/JS). _csv_safe() prefixes
                 formula-triggering characters for spreadsheet safety.
