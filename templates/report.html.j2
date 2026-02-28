@@ -356,6 +356,18 @@
   .sticky-nav a:hover { color: var(--text); background: var(--surface2); text-decoration: none; }
   .sticky-nav a.active { color: var(--accent); background: rgba(56,189,248,0.1); }
 
+  /* ── Signal detail text (print-visible) ─────────────────────────────── */
+  .signal-detail-text {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 6px;
+    line-height: 1.5;
+    font-style: italic;
+  }
+
+  /* ── Muted empty-state cell ──────────────────────────────────────────── */
+  td.muted { color: var(--muted); font-style: italic; text-align: center; padding: 20px 14px; }
+
   /* ── Print styles ────────────────────────────────────────────────────── */
   @media print {
     .sticky-nav { display: none; }
@@ -368,6 +380,16 @@
 </style>
 </head>
 <body>
+
+{# ── Reusable macro: app name / app ID / description cell ──────────────────── #}
+{% macro app_cell(app) %}
+<div class="app-name">{{ app.display_name }}<a href="https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationMenuBlade/~/Overview/appId/{{ app.app_id }}" target="_blank" rel="noopener" title="Open in Entra admin center" class="entra-link">↗</a></div>
+<div class="app-id">{{ app.app_id }}</div>
+{% set _desc = (app.description or app.notes or '') | trim %}
+{% if _desc %}
+<div class="app-desc" title="{{ _desc }}">{{ _desc[:100] }}{{ '…' if _desc | length > 100 else '' }}</div>
+{% endif %}
+{% endmacro %}
 
 <!-- ── Header ────────────────────────────────────────────────────────────── -->
 <div class="header">
@@ -541,14 +563,7 @@
         <tbody>
           {% for app in all_apps %}
           <tr data-band="{{ app.risk_band }}" data-name="{{ app.display_name | lower }}" data-appid="{{ app.app_id | lower }}" data-microsoft="{{ 'true' if app.is_microsoft_first_party else 'false' }}" data-artifact="{{ 'true' if app.is_tool_artifact else 'false' }}">
-            <td>
-              <div class="app-name">{{ app.display_name }}<a href="https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationMenuBlade/~/Overview/appId/{{ app.app_id }}" target="_blank" rel="noopener" title="Open in Entra admin center" class="entra-link">↗</a></div>
-              <div class="app-id">{{ app.app_id }}</div>
-              {% set _desc = (app.description or app.notes or '') | trim %}
-              {% if _desc %}
-              <div class="app-desc" title="{{ _desc }}">{{ _desc[:100] }}{{ '…' if _desc | length > 100 else '' }}</div>
-              {% endif %}
-            </td>
+            <td>{{ app_cell(app) }}</td>
             <td data-val="{{ app.risk_score }}">
               <div class="score-bar-wrap">
                 <div class="score-bar">
@@ -605,14 +620,7 @@
         <tbody>
           {% for app in critical_high_apps %}
           <tr class="expand-trigger" onclick="toggleRow('crit-{{ loop.index }}', this)">
-            <td>
-              <div class="app-name">{{ app.display_name }}<a href="https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationMenuBlade/~/Overview/appId/{{ app.app_id }}" target="_blank" rel="noopener" title="Open in Entra admin center" class="entra-link">↗</a></div>
-              <div class="app-id">{{ app.app_id }}</div>
-              {% set _desc = (app.description or app.notes or '') | trim %}
-              {% if _desc %}
-              <div class="app-desc" title="{{ _desc }}">{{ _desc[:100] }}{{ '…' if _desc | length > 100 else '' }}</div>
-              {% endif %}
-            </td>
+            <td>{{ app_cell(app) }}</td>
             <td data-val="{{ app.risk_score }}">
               <div class="score-bar-wrap">
                 <div class="score-bar">
@@ -625,7 +633,7 @@
             <td data-val="{{ app.days_since_sign_in if app.days_since_sign_in is not none else 99999 }}">{{ app.last_sign_in | format_date if app.last_sign_in else '—' }}</td>
             <td data-val="{{ app.owner_count }}">{{ app.owner_count }}</td>
             <td data-val="{{ app.assignment_count }}">{{ app.assignment_count }}</td>
-            <td style="font-size: 12px; color: var(--muted); max-width: 220px;">{{ app.primary_recommendation[:80] }}{% if app.primary_recommendation | length > 80 %}...{% endif %}</td>
+            <td style="font-size: 12px; color: var(--muted); max-width: 220px;">{{ app.primary_recommendation[:80] }}{% if app.primary_recommendation | length > 80 %}…{% endif %}</td>
           </tr>
           <tr class="expand-row" id="crit-{{ loop.index }}">
             <td colspan="7">
@@ -635,6 +643,11 @@
                   <span class="signal-chip signal-{{ sig.severity }}" title="{{ sig.detail }}">{{ sig.title }}</span>
                   {% endfor %}
                 </div>
+                {% for sig in app.signals %}
+                {% if sig.detail %}
+                <p class="signal-detail-text">{{ sig.detail }}</p>
+                {% endif %}
+                {% endfor %}
                 <div class="rec-box"><strong>Recommendation:</strong> {{ app.primary_recommendation }}</div>
               </div>
             </td>
@@ -668,14 +681,7 @@
         <tbody>
           {% for app in stale_apps %}
           <tr class="expand-trigger" onclick="toggleRow('stale-{{ loop.index }}', this)">
-            <td>
-              <div class="app-name">{{ app.display_name }}<a href="https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationMenuBlade/~/Overview/appId/{{ app.app_id }}" target="_blank" rel="noopener" title="Open in Entra admin center" class="entra-link">↗</a></div>
-              <div class="app-id">{{ app.app_id }}</div>
-              {% set _desc = (app.description or app.notes or '') | trim %}
-              {% if _desc %}
-              <div class="app-desc" title="{{ _desc }}">{{ _desc[:100] }}{{ '…' if _desc | length > 100 else '' }}</div>
-              {% endif %}
-            </td>
+            <td>{{ app_cell(app) }}</td>
             <td data-val="{{ app.days_since_sign_in if app.days_since_sign_in is not none else 99999 }}">{{ app.last_sign_in | format_date if app.last_sign_in else 'Never' }}</td>
             <td data-val="{{ app.days_since_sign_in if app.days_since_sign_in is not none else 99999 }}">{% if app.days_since_sign_in is not none %}{{ app.days_since_sign_in }}d{% else %}—{% endif %}</td>
             <td data-val="{{ app.owner_count }}">{{ app.owner_count }}</td>
@@ -690,6 +696,11 @@
                   <span class="signal-chip signal-{{ sig.severity }}" title="{{ sig.detail }}">{{ sig.title }}</span>
                   {% endfor %}
                 </div>
+                {% for sig in app.signals %}
+                {% if sig.detail %}
+                <p class="signal-detail-text">{{ sig.detail }}</p>
+                {% endif %}
+                {% endfor %}
                 <div class="rec-box"><strong>Recommendation:</strong> {{ app.primary_recommendation }}</div>
               </div>
             </td>
@@ -725,14 +736,7 @@
         <tbody>
           {% for app in credential_apps %}
           <tr class="expand-trigger" onclick="toggleRow('cred-{{ loop.index }}', this)">
-            <td>
-              <div class="app-name">{{ app.display_name }}<a href="https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationMenuBlade/~/Overview/appId/{{ app.app_id }}" target="_blank" rel="noopener" title="Open in Entra admin center" class="entra-link">↗</a></div>
-              <div class="app-id">{{ app.app_id }}</div>
-              {% set _desc = (app.description or app.notes or '') | trim %}
-              {% if _desc %}
-              <div class="app-desc" title="{{ _desc }}">{{ _desc[:100] }}{{ '…' if _desc | length > 100 else '' }}</div>
-              {% endif %}
-            </td>
+            <td>{{ app_cell(app) }}</td>
             <td data-val="{{ 1 if app.has_expired_secret else 0 }}">{% if app.has_expired_secret %}<span class="badge badge-critical">Yes</span>{% else %}—{% endif %}</td>
             <td data-val="{{ 1 if app.has_expired_cert else 0 }}">{% if app.has_expired_cert %}<span class="badge badge-critical">Yes</span>{% else %}—{% endif %}</td>
             <td data-val="{{ 1 if app.has_near_expiry_secret else 0 }}">{% if app.has_near_expiry_secret %}<span class="badge badge-high">Yes</span>{% else %}—{% endif %}</td>
@@ -757,6 +761,11 @@
                   <span class="signal-chip signal-{{ sig.severity }}" title="{{ sig.detail }}">{{ sig.title }}</span>
                   {% endfor %}
                 </div>
+                {% for sig in app.signals %}
+                {% if sig.detail %}
+                <p class="signal-detail-text">{{ sig.detail }}</p>
+                {% endif %}
+                {% endfor %}
                 <div class="rec-box"><strong>Recommendation:</strong> {{ app.primary_recommendation }}</div>
               </div>
             </td>
@@ -789,14 +798,7 @@
         <tbody>
           {% for app in orphaned_apps %}
           <tr class="expand-trigger" onclick="toggleRow('orphan-{{ loop.index }}', this)">
-            <td>
-              <div class="app-name">{{ app.display_name }}<a href="https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationMenuBlade/~/Overview/appId/{{ app.app_id }}" target="_blank" rel="noopener" title="Open in Entra admin center" class="entra-link">↗</a></div>
-              <div class="app-id">{{ app.app_id }}</div>
-              {% set _desc = (app.description or app.notes or '') | trim %}
-              {% if _desc %}
-              <div class="app-desc" title="{{ _desc }}">{{ _desc[:100] }}{{ '…' if _desc | length > 100 else '' }}</div>
-              {% endif %}
-            </td>
+            <td>{{ app_cell(app) }}</td>
             <td data-val="{{ app.owner_count }}">{{ app.owner_count }}</td>
             <td data-val="{{ app.disabled_owner_count }}">{{ app.disabled_owner_count }}</td>
             <td data-val="{{ app.days_since_sign_in if app.days_since_sign_in is not none else 99999 }}">{{ app.last_sign_in | format_date if app.last_sign_in else '—' }}</td>
@@ -810,6 +812,11 @@
                   <span class="signal-chip signal-{{ sig.severity }}" title="{{ sig.detail }}">{{ sig.title }}</span>
                   {% endfor %}
                 </div>
+                {% for sig in app.signals %}
+                {% if sig.detail %}
+                <p class="signal-detail-text">{{ sig.detail }}</p>
+                {% endif %}
+                {% endfor %}
                 <div class="rec-box"><strong>Recommendation:</strong> {{ app.primary_recommendation }}</div>
               </div>
             </td>
@@ -841,14 +848,7 @@
         <tbody>
           {% for app in high_privilege_apps %}
           <tr class="expand-trigger" onclick="toggleRow('priv-{{ loop.index }}', this)">
-            <td>
-              <div class="app-name">{{ app.display_name }}<a href="https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationMenuBlade/~/Overview/appId/{{ app.app_id }}" target="_blank" rel="noopener" title="Open in Entra admin center" class="entra-link">↗</a></div>
-              <div class="app-id">{{ app.app_id }}</div>
-              {% set _desc = (app.description or app.notes or '') | trim %}
-              {% if _desc %}
-              <div class="app-desc" title="{{ _desc }}">{{ _desc[:100] }}{{ '…' if _desc | length > 100 else '' }}</div>
-              {% endif %}
-            </td>
+            <td>{{ app_cell(app) }}</td>
             <td data-val="{{ app.days_since_sign_in if app.days_since_sign_in is not none else 99999 }}">{{ app.last_sign_in | format_date if app.last_sign_in else '—' }}</td>
             <td><span class="badge badge-critical">Yes</span></td>
             <td data-val="{{ app.risk_score }}"><span class="badge badge-{{ app.risk_band }}">{{ app.risk_band }}</span></td>
@@ -861,6 +861,11 @@
                   <span class="signal-chip signal-{{ sig.severity }}" title="{{ sig.detail }}">{{ sig.title }}</span>
                   {% endfor %}
                 </div>
+                {% for sig in app.signals %}
+                {% if sig.detail %}
+                <p class="signal-detail-text">{{ sig.detail }}</p>
+                {% endif %}
+                {% endfor %}
                 <div class="rec-box"><strong>Recommendation:</strong> {{ app.primary_recommendation }}</div>
               </div>
             </td>
@@ -921,7 +926,7 @@
       <div class="callout-body">
         <strong>No Conditional Access policies found</strong>
         The <code>Policy.Read.All</code> permission was granted successfully but this tenant has no CA policies configured.
-        Consider creating policies in the <a href="https://entra.microsoft.com/#view/Microsoft_AAD_ConditionalAccess/CaOverviewBlade" target="_blank" rel="noopener">Entra admin centre</a>.
+        Consider creating policies in the <a href="https://entra.microsoft.com/#view/Microsoft_AAD_ConditionalAccess/CaOverviewBlade" target="_blank" rel="noopener">Entra admin center</a>.
       </div>
     </div>
     {% elif ca_policy_summaries | selectattr('is_enforced') | list | length == 0 %}
@@ -947,6 +952,7 @@
           </tr>
         </thead>
         <tbody>
+          {% if ca_app_coverages %}
           {% for cov in ca_app_coverages | sort(attribute='display_name') %}
           <tr>
             <td class="app-name">{{ cov.display_name }}</td>
@@ -967,6 +973,9 @@
             </td>
           </tr>
           {% endfor %}
+          {% else %}
+          <tr><td colspan="4" class="muted">No app coverage data available.</td></tr>
+          {% endif %}
         </tbody>
       </table>
     </div>
