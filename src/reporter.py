@@ -224,7 +224,6 @@ def generate_html(
         ca_available=ca_available,
         ca_permission_granted=ca_permission_granted,
         ca_in_cache=ca_in_cache,
-        ca_in_cache=ca_in_cache,
         ca_app_coverages=ca_app_coverages,
         ca_policy_summaries=ca_policy_summaries,
         ca_covered_count=covered_count,
