@@ -43,6 +43,8 @@ Enterprise-Zapp scans your Microsoft Entra ID tenant for enterprise app hygiene 
 
 ![App Inventory Table](https://raw.githubusercontent.com/scottalt/Enterprise-Zapp/docs/assets/report-overview2.png)
 
+![Conditional Access Coverage](https://raw.githubusercontent.com/scottalt/Enterprise-Zapp/docs/assets/report-cap.png)
+
 **What the terminal output looks like:**
 
 ```
