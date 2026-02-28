@@ -21,6 +21,7 @@
     --low:      #22c55e;
     --clean:    #10b981;
     --brand:    #818cf8;
+    --ca-accent: #a78bfa;
     --nav-height: 49px;
   }
   body {
@@ -282,6 +283,44 @@
   }
   .callout-artifact-list li::before { content: '• '; color: #fbbf24; }
 
+  /* ── Conditional Access section ─────────────────────────────────────── */
+  .ca-section-title {
+    font-size: 18px; font-weight: 700; color: var(--text);
+    border-left: 3px solid var(--ca-accent); padding-left: 12px;
+    margin-bottom: 16px;
+  }
+  .ca-summary-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px;
+    margin-bottom: 28px;
+  }
+  .ca-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 18px; text-align: center; position: relative; overflow: hidden;
+  }
+  .ca-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: var(--ca-accent);
+  }
+  .ca-card .count { font-size: 32px; font-weight: 800; color: var(--ca-accent); line-height: 1; }
+  .ca-card .label { font-size: 12px; color: var(--muted); margin-top: 6px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .ca-card.ca-covered .count { color: var(--clean); }
+  .ca-card.ca-covered::before { background: var(--clean); }
+  .ca-card.ca-uncovered .count { color: var(--medium); }
+  .ca-card.ca-uncovered::before { background: var(--medium); }
+  .ca-badge-covered   { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; background: rgba(34,197,94,0.12); color: var(--clean); border: 1px solid rgba(34,197,94,0.3); }
+  .ca-badge-uncovered { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; background: rgba(234,179,8,0.12); color: var(--medium); border: 1px solid rgba(234,179,8,0.3); }
+  .ca-state-enabled  { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; background: rgba(34,197,94,0.12); color: var(--clean); }
+  .ca-state-disabled { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; background: rgba(142,142,142,0.12); color: var(--muted); }
+  .ca-state-report   { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; background: rgba(56,189,248,0.12); color: var(--accent); }
+  .ca-policy-names   { font-size: 11px; color: var(--muted); font-style: italic; max-width: 280px; }
+  .ca-unavailable {
+    background: rgba(167,139,250,0.07); border: 1px solid rgba(167,139,250,0.25);
+    border-radius: 10px; padding: 28px 24px; text-align: center;
+  }
+  .ca-unavailable h3 { color: var(--ca-accent); margin-bottom: 10px; }
+  .ca-unavailable p  { color: var(--muted); font-size: 13px; max-width: 520px; margin: 0 auto; }
+  .ca-unavailable code { color: var(--ca-accent); background: rgba(167,139,250,0.1); border-radius: 4px; padding: 1px 6px; }
+
   /* ── Sticky nav ──────────────────────────────────────────────────────── */
   .sticky-nav {
     position: sticky;
@@ -361,6 +400,7 @@
     {% if credential_apps %}<li><a href="#sec-creds">Credentials</a></li>{% endif %}
     {% if orphaned_apps %}<li><a href="#sec-orphaned">Orphaned</a></li>{% endif %}
     {% if high_privilege_apps %}<li><a href="#sec-priv">Over-Privileged</a></li>{% endif %}
+    <li><a href="#sec-ca">CA Coverage</a></li>
     <li><a href="#sec-methodology">Methodology</a></li>
   </ul>
 </nav>
@@ -832,6 +872,146 @@
   </div>
   {% endif %}
 
+  <!-- ── Conditional Access Coverage ──────────────────────────────────── -->
+  <div class="section" id="sec-ca">
+    <div class="ca-section-title">
+      Conditional Access Coverage
+      <div class="section-subtitle">Which enterprise apps are protected by enforced CA policies?</div>
+    </div>
+
+    {% if not ca_available %}
+    <div class="ca-unavailable">
+      <h3>&#128274; CA Data Unavailable</h3>
+      <p>
+        Conditional Access policy data could not be retrieved — <code>Policy.Read.All</code> is not granted or the endpoint is unreachable.<br><br>
+        Re-run <code>.\setup.ps1</code> (it now includes this permission automatically), then run a fresh scan.
+        Note: Conditional Access requires <strong>Azure AD Premium P1</strong> or higher.
+      </p>
+    </div>
+
+    {% else %}
+
+    <!-- Summary cards -->
+    <div class="ca-summary-grid">
+      <div class="ca-card">
+        <div class="count">{{ ca_policy_summaries | length }}</div>
+        <div class="label">Total Policies</div>
+      </div>
+      <div class="ca-card">
+        <div class="count">{{ ca_policy_summaries | selectattr('is_enforced') | list | length }}</div>
+        <div class="label">Enforced</div>
+      </div>
+      <div class="ca-card ca-covered">
+        <div class="count">{{ ca_coverage_pct }}%</div>
+        <div class="label">Apps Covered</div>
+      </div>
+      <div class="ca-card ca-covered">
+        <div class="count">{{ ca_covered_count }}</div>
+        <div class="label">Covered Apps</div>
+      </div>
+      <div class="ca-card ca-uncovered">
+        <div class="count">{{ ca_app_coverages | length - ca_covered_count }}</div>
+        <div class="label">Not Covered</div>
+      </div>
+    </div>
+
+    {% if not ca_policy_summaries %}
+    <div class="callout callout-info" style="margin-bottom:20px;">
+      <div class="callout-icon">&#8505;</div>
+      <div class="callout-body">
+        <strong>No Conditional Access policies found</strong>
+        The <code>Policy.Read.All</code> permission was granted successfully but this tenant has no CA policies configured.
+        Consider creating policies in the <a href="https://entra.microsoft.com/#view/Microsoft_AAD_ConditionalAccess/CaOverviewBlade" target="_blank" rel="noopener">Entra admin centre</a>.
+      </div>
+    </div>
+    {% elif ca_policy_summaries | selectattr('is_enforced') | list | length == 0 %}
+    <div class="callout callout-warning" style="margin-bottom:20px;">
+      <div class="callout-icon">&#9888;</div>
+      <div class="callout-body">
+        <strong>No enforced CA policies found</strong>
+        All {{ ca_policy_summaries | length }} {{ 'policy is' if ca_policy_summaries | length == 1 else 'policies are' }} either disabled or in report-only mode. No enterprise apps are protected.
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- App coverage table -->
+    <div class="section-title" style="font-size:15px; margin-bottom:12px; border-color: var(--ca-accent);">App Coverage</div>
+    <div class="table-wrap" style="margin-bottom:28px;">
+      <table id="tbl-ca-apps">
+        <thead>
+          <tr>
+            <th onclick="sortTable('tbl-ca-apps',0)">App Name</th>
+            <th onclick="sortTable('tbl-ca-apps',1)">App ID</th>
+            <th onclick="sortTable('tbl-ca-apps',2)">Coverage</th>
+            <th onclick="sortTable('tbl-ca-apps',3)">Enforced Policies</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for cov in ca_app_coverages | sort(attribute='display_name') %}
+          <tr>
+            <td class="app-name">{{ cov.display_name }}</td>
+            <td class="app-id">{{ cov.app_id }}</td>
+            <td>
+              {% if cov.is_covered %}
+              <span class="ca-badge-covered">Covered</span>
+              {% else %}
+              <span class="ca-badge-uncovered">Not Covered</span>
+              {% endif %}
+            </td>
+            <td class="ca-policy-names">
+              {% if cov.policy_names %}
+              {{ cov.policy_names | join(', ') }}
+              {% else %}
+              <span style="color:var(--muted);">—</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Policy inventory table -->
+    <div class="section-title" style="font-size:15px; margin-bottom:12px; border-color: var(--ca-accent);">Policy Inventory</div>
+    <div class="table-wrap">
+      <table id="tbl-ca-policies">
+        <thead>
+          <tr>
+            <th onclick="sortTable('tbl-ca-policies',0)">Policy Name</th>
+            <th onclick="sortTable('tbl-ca-policies',1)">State</th>
+            <th onclick="sortTable('tbl-ca-policies',2)">App Scope</th>
+            <th onclick="sortTable('tbl-ca-policies',3)">Created</th>
+            <th onclick="sortTable('tbl-ca-policies',4)">Last Modified</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for pol in ca_policy_summaries | sort(attribute='display_name') %}
+          <tr>
+            <td class="app-name">{{ pol.display_name }}</td>
+            <td><span class="{{ pol.state_css }}">{{ pol.state_label }}</span></td>
+            <td>
+              {% if pol.includes_all_apps %}
+                All apps
+                {% if pol.excluded_app_ids %}
+                  <span style="color:var(--muted); font-size:11px;">({{ pol.excluded_app_ids | length }} excluded)</span>
+                {% endif %}
+              {% elif pol.included_app_ids %}
+                {{ pol.included_app_ids | length }} specific app{{ 's' if pol.included_app_ids | length != 1 else '' }}
+              {% else %}
+                <span style="color:var(--muted);">None</span>
+              {% endif %}
+            </td>
+            <td style="white-space:nowrap;">{{ pol.created_datetime | format_date }}</td>
+            <td style="white-space:nowrap;">{{ pol.modified_datetime | format_date }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% endif %}{# ca_available #}
+  </div>
+
   <!-- ── Methodology ────────────────────────────────────────────────────── -->
   <div class="section" id="sec-methodology">
     <div class="section-title">Methodology &amp; Transparency</div>
@@ -846,6 +1026,7 @@
           <li>Application permission assignments</li>
           <li>Service principal sign-in activity</li>
           <li>Disabled user list (for orphan detection)</li>
+          <li>Conditional Access policies (if permitted)</li>
         </ul>
       </div>
       <div class="method-card">

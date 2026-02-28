@@ -21,6 +21,7 @@ from rich.console import Console
 
 from . import __version__
 from .analyzer import AppResult, band_counts
+from .ca_analyzer import analyze_ca_coverage
 
 console = Console()
 
@@ -178,6 +179,21 @@ def generate_html(
     except (ValueError, TypeError):
         collected_at = collected_at_raw
 
+    # ── Conditional Access coverage ─────────────────────────────────────────
+    ca_policies_raw = raw_data.get("ca_policies", [])
+    # ca_permission_granted distinguishes "no permission" from "zero policies configured"
+    ca_permission_granted = raw_data.get("ca_permission_granted", False)
+    ca_app_coverages, ca_policy_summaries = analyze_ca_coverage(
+        ca_policies_raw, raw_data.get("apps", [])
+    )
+    ca_available = ca_permission_granted
+    if ca_available:
+        covered_count = sum(1 for c in ca_app_coverages if c.is_covered)
+        ca_coverage_pct = round(covered_count / len(ca_app_coverages) * 100) if ca_app_coverages else 0
+    else:
+        covered_count = 0
+        ca_coverage_pct = 0
+
     html_content = template.render(
         tenant_name=tenant.get("displayName", "Unknown Tenant"),
         tenant_id=tenant.get("id", ""),
@@ -199,6 +215,12 @@ def generate_html(
         hide_microsoft=hide_microsoft,
         microsoft_app_count=microsoft_app_count,
         tool_artifact_apps=tool_artifact_apps,
+        ca_available=ca_available,
+        ca_permission_granted=ca_permission_granted,
+        ca_app_coverages=ca_app_coverages,
+        ca_policy_summaries=ca_policy_summaries,
+        ca_covered_count=covered_count,
+        ca_coverage_pct=ca_coverage_pct,
     )
 
     output_path.write_text(html_content, encoding="utf-8")
@@ -206,6 +228,13 @@ def generate_html(
 
 
 # ── CSV export ─────────────────────────────────────────────────────────────────
+
+
+def _csv_safe(value: str) -> str:
+    """Prefix formula-triggering characters so spreadsheets treat them as literals."""
+    if value and value[0] in ("=", "+", "-", "@", "\t", "\r"):
+        return "'" + value
+    return value
 
 
 def generate_csv(results: list[AppResult], output_path: Path) -> Path:
@@ -253,7 +282,7 @@ def generate_csv(results: list[AppResult], output_path: Path) -> Path:
 
             writer.writerow(
                 {
-                    "app_name": r.display_name,
+                    "app_name": _csv_safe(r.display_name),
                     "app_id": r.app_id,
                     "object_id": r.sp_id,
                     "account_enabled": "yes" if r.account_enabled else "no",
@@ -276,7 +305,7 @@ def generate_csv(results: list[AppResult], output_path: Path) -> Path:
                     "is_tool_artifact": "yes" if r.is_tool_artifact else "no",
                     "signal_keys": "|".join(s.key for s in r.signals),
                     "signal_count": len(r.signals),
-                    "primary_recommendation": r.primary_recommendation,
+                    "primary_recommendation": _csv_safe(r.primary_recommendation),
                 }
             )
 

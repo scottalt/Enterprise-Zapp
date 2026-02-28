@@ -107,9 +107,25 @@ def collect(client: GraphClient, output_dir: Path, cache_path: Path | None = Non
             )
             progress.advance(task)
 
+    # ── Step 6: Conditional Access policies ────────────────────────────────────
+    with console.status("[cyan]Fetching Conditional Access policies..."):
+        ca_policies_result = client.get_conditional_access_policies()
+
+    ca_permission_granted = ca_policies_result is not None
+    ca_policies = ca_policies_result if ca_permission_granted else []
+
+    if not ca_permission_granted:
+        skipped.append("ca_policies")
+    elif ca_policies:
+        console.print(f"[green]CA policies found:[/green] {len(ca_policies):,}")
+    else:
+        console.print("[dim]CA policies: none configured in this tenant.[/dim]")
+
     result = {
         "tenant": tenant,
         "apps": enriched,
+        "ca_policies": ca_policies,
+        "ca_permission_granted": ca_permission_granted,
         "collected_at": datetime.now(timezone.utc).isoformat(),
         "skipped": skipped,
     }

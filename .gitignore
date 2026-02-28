@@ -1,6 +1,9 @@
 # ── Scan output ───────────────────────────────────────────────────────────────
 output/
 
+# ── Example / local assets (screenshots, sample data) ─────────────────────────
+assets/
+
 # ── Tenant config (contains tenant_id and client_id — never commit) ───────────
 enterprise_zapp_config.json
 *.config.json

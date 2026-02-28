@@ -190,3 +190,27 @@ class GraphClient:
             return disabled_ids
         except (PermissionError, RuntimeError):
             return set()
+
+    def get_conditional_access_policies(self) -> list[dict] | None:
+        """
+        Return all Conditional Access policies. Requires Policy.Read.All.
+
+        Returns:
+            list[dict]  — policies fetched (may be empty if none are configured)
+            None        — permission denied or endpoint unreachable
+        """
+        try:
+            return list(self.get_paged(
+                "/identity/conditionalAccess/policies",
+                params={
+                    "$select": (
+                        "id,displayName,state,conditions,createdDateTime,modifiedDateTime"
+                    )
+                },
+            ))
+        except (PermissionError, RuntimeError) as exc:
+            console.print(
+                f"[yellow]CA policies unavailable ({exc}). "
+                "Grant Policy.Read.All to enable Conditional Access coverage analysis.[/yellow]"
+            )
+            return None
