@@ -1,8 +1,8 @@
 ﻿<#
 .SYNOPSIS
     Enterprise-Zapp one-time setup script.
-    Creates a temporary, read-only app registration in your Entra ID tenant
-    that Enterprise-Zapp uses to scan for hygiene issues.
+    Creates a temporary app registration in your Entra ID tenant with
+    read-only Microsoft Graph permissions for the hygiene scan.
 
 .DESCRIPTION
     This script:
@@ -70,10 +70,11 @@ function Write-Banner {
     Write-Host ""
     if ($Mode -eq "Cleanup") {
         Write-Host "  Entra ID Enterprise App Hygiene Scanner — Cleanup" -ForegroundColor White
-        Write-Host "  Removing the Enterprise-Zapp app registration from your tenant." -ForegroundColor Yellow
+        Write-Host "  Deletes the Enterprise-Zapp app registration from your tenant." -ForegroundColor Yellow
     } else {
         Write-Host "  Entra ID Enterprise App Hygiene Scanner — Setup" -ForegroundColor White
-        Write-Host "  Read-only. No changes made to your tenant." -ForegroundColor Green
+        Write-Host "  Creates a temporary app registration with read-only Graph permissions." -ForegroundColor Yellow
+        Write-Host "  The scan itself is read-only. Run .\setup.ps1 -Cleanup when done." -ForegroundColor Gray
     }
     Write-Host ""
 }

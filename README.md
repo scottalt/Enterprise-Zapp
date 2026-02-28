@@ -33,9 +33,17 @@
 
 Enterprise-Zapp scans your Microsoft Entra ID tenant for enterprise app hygiene issues — expired credentials, stale apps, orphaned registrations, over-privileged service principals, and Conditional Access coverage gaps — and produces a detailed, self-contained HTML report you can open in any browser, share with your team, or drop into an audit package.
 
-> **The scan is read-only.** Once set up, Enterprise-Zapp only reads data from the Microsoft Graph API — it never modifies, disables, or deletes anything in your tenant. It collects data, surfaces risks, and tells you what to fix. Your team makes the call.
->
-> **Setup creates one app registration.** `setup.ps1` is a one-time write operation — it registers a temporary app in your tenant and grants admin consent. Cleanup (`setup.ps1 -Cleanup`) deletes it. Both operations require an admin role; see [Required Entra ID Roles](#required-entra-id-roles) for the specific requirements.
+## How It Works
+
+Enterprise-Zapp has a three-phase lifecycle. Each phase has a distinct impact on your tenant:
+
+| Phase | Command | Tenant impact | Who runs it |
+|-------|---------|--------------|-------------|
+| **1. Setup** | `.\setup.ps1` | **Creates** one app registration (`Enterprise-Zapp`) with read-only Graph permissions. This is the only write operation. | Privileged Role Administrator or Global Administrator |
+| **2. Scan** | `enterprise-zapp` | **Read-only.** Queries Graph API and writes a report to your local machine. Zero changes to the tenant. | Anyone with an Entra ID account in the tenant |
+| **3. Cleanup** | `.\setup.ps1 -Cleanup` | **Deletes** the app registration created in step 1. | Application Administrator or Global Administrator |
+
+> Cleanup requires a **different role** from setup. Privileged Role Administrator (needed to grant admin consent during setup) cannot delete app registrations. Deletion requires Application Administrator or Global Administrator. See [Required Entra ID Roles](#required-entra-id-roles).
 
 ---
 
@@ -108,15 +116,15 @@ Each app receives a **risk score (0–100)** and a **risk band** (Critical / Hig
 
 ## What It Does NOT Do
 
-The **scan** (steps 2–3) never modifies your tenant:
+The **scan** (phase 2) never modifies your tenant. It does not:
 
-- Does **not** modify, disable, or delete any app or service principal
-- Does **not** revoke credentials or permissions
-- Does **not** send data to any external service
-- Does **not** require persistent infrastructure or a deployed application
-- Does **not** store credentials — authentication uses Microsoft's device code flow
+- Modify, disable, or delete any app or service principal
+- Revoke credentials or permissions
+- Send data to any external service
+- Require persistent infrastructure or a deployed application
+- Store credentials — authentication uses Microsoft's device code flow
 
-> **Note:** `setup.ps1` (step 1) creates one temporary app registration in your tenant, and `setup.ps1 -Cleanup` deletes it. These are the only write operations — both require an admin role.
+> Setup (phase 1) creates one app registration, and cleanup (phase 3) deletes it. These are the only write operations. See [How It Works](#how-it-works) for the full lifecycle.
 
 ---
 

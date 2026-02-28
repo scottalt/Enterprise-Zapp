@@ -45,7 +45,7 @@ BANNER = f"""[bold]
                      ╚══════╝ ╚═╝  ╚═╝ ╚═╝      ╚═╝
 [/bold green]
 [dim]  Entra ID Enterprise App Hygiene Scanner  ·  v{__version__}[/dim]
-[bold green]  Scan is Read-Only. The scan makes no changes to your Entra ID tenant.[/bold green]
+[bold green]  Scan is read-only · Setup creates one app registration · Cleanup deletes it[/bold green]
 [dim]  By Scott Altiparmak · https://www.linkedin.com/in/scottaltiparmak/[/dim]
 """
 
@@ -162,12 +162,14 @@ def main(
 
         console.print(
             Panel(
-                "[bold yellow]The scan is read-only.[/bold yellow]\n"
-                "It collects data from the Microsoft Graph API and produces a report.\n"
-                "[bold]No changes will be made to your Entra ID tenant during the scan.[/bold]\n"
-                "[dim]Note: setup.ps1 created one app registration in your tenant. "
-                "Run [cyan].\\setup.ps1 -Cleanup[/cyan] (as Application Administrator) to remove it when done.[/dim]",
-                border_style="yellow",
+                "[bold green]The scan is read-only.[/bold green] "
+                "No changes will be made to your Entra ID tenant.\n\n"
+                "[bold yellow]Note:[/bold yellow] [bold]setup.ps1[/bold] created an [bold]Enterprise-Zapp[/bold] "
+                "app registration in your tenant. It only holds read-only Graph permissions, "
+                "but you should delete it when your audit is complete:\n"
+                "  [cyan].\\setup.ps1 -Cleanup[/cyan]  [dim](requires Application Administrator)[/dim]",
+                border_style="cyan",
+                title="[bold cyan]Scan Scope[/bold cyan]",
             )
         )
 
@@ -306,11 +308,19 @@ def main(
         }
         click.echo(json_module.dumps(summary, indent=2))
 
-    # ── Cleanup offer ────────────────────────────────────────────────────────
-    if not from_cache:
+    # ── Cleanup reminder ─────────────────────────────────────────────────────
+    if not from_cache and not quiet:
         console.print(
-            "\n[dim]Tip: To remove the temporary app registration created by setup.ps1, run:[/dim]\n"
-            "  [cyan].\\setup.ps1 -Cleanup[/cyan]"
+            Panel(
+                "[bold]Cleanup reminder[/bold]\n"
+                "Setup created an [bold]Enterprise-Zapp[/bold] app registration in your tenant.\n"
+                "Once you are done with your audit, delete it by running:\n\n"
+                "  [cyan bold].\\setup.ps1 -Cleanup[/cyan bold]\n\n"
+                "[dim]Requires Application Administrator or Global Administrator.\n"
+                "The app only holds read-only Graph permissions, but removing it is good hygiene.[/dim]",
+                border_style="yellow",
+                title="[bold yellow]Action Required After Audit[/bold yellow]",
+            )
         )
 
     # Exit with meaningful code so pipelines can branch on severity.
