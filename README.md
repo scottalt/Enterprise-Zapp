@@ -211,13 +211,20 @@ Reports are written to `./output/` when the scan completes.
 
 ### Step 4 — Clean up
 
+Two options:
+
+**Option A — PowerShell (recommended if you have a separate admin account for cleanup):**
 ```powershell
 .\setup.ps1 -Cleanup
 ```
 
-Deletes the temporary app registration from your tenant.
+**Option B — built into the scan (convenient for single-admin workflows):**
+```bash
+enterprise-zapp --cleanup-after
+```
+Add `--cleanup-after` to your scan command and you'll be prompted at the end of the scan whether to delete the app registration. A second sign-in is required for this step.
 
-> **Cleanup requires a different role than setup.** Deleting an app registration requires the **Application Administrator** or **Global Administrator** role. The Privileged Role Administrator role used for setup (admin consent) does not have delete rights over app registrations. See [Required Entra ID Roles](#required-entra-id-roles).
+> **Cleanup requires a different role than setup.** Deleting an app registration requires **Application Administrator** or **Global Administrator**. The Privileged Role Administrator role used during setup (to grant admin consent) cannot delete app registrations. See [Required Entra ID Roles](#required-entra-id-roles).
 
 ---
 
@@ -241,6 +248,9 @@ Options:
                                    Only include apps at or above this risk band. [default: all]
   --quiet                          Suppress banner, disclaimer, and decorative output. Only print errors and output paths.
   --json-output                    Print a structured JSON summary to stdout after the scan.
+  --cleanup-after                  After generating the report, prompt to delete the Enterprise-Zapp
+                                   app registration. Requires a second sign-in as Application
+                                   Administrator or Global Administrator.
   -V, --version                    Show version.
   --help                           Show help.
 ```

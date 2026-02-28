@@ -21,13 +21,137 @@ from rich.table import Table
 
 from . import __version__
 from .analyzer import analyze_all, band_counts
-from .auth import get_token
+from .auth import get_token, DEFAULT_CONFIG_FILE
 from .ca_analyzer import analyze_ca_coverage
 from .collector import collect
 from .graph import GraphClient
 from .reporter import generate_all, _top_recommendations
 
 console = Console()
+
+_GRAPH_BASE = "https://graph.microsoft.com/v1.0"
+_CLEANUP_SCOPES = ["https://graph.microsoft.com/Application.ReadWrite.All"]
+
+
+def _perform_cleanup(config_path: Path) -> None:
+    """
+    Re-authenticate as Application Administrator and delete the Enterprise-Zapp
+    app registration via Microsoft Graph, then remove the local config file.
+
+    Uses a fresh device code flow requesting Application.ReadWrite.All.
+    The signed-in account must hold Application Administrator or Global Administrator.
+    """
+    import msal
+    import requests
+
+    if not config_path.exists():
+        console.print(
+            "[yellow]Config file not found — the app registration may already have been deleted.[/yellow]"
+        )
+        return
+
+    try:
+        cfg = json.loads(config_path.read_text(encoding="utf-8-sig"))
+    except (json.JSONDecodeError, OSError) as exc:
+        console.print(f"[red]Could not read config file: {exc}[/red]")
+        return
+
+    app_client_id = cfg.get("client_id")
+    tenant_id = cfg.get("tenant_id")
+    if not app_client_id or not tenant_id:
+        console.print("[red]Config file is missing client_id or tenant_id.[/red]")
+        return
+
+    console.print(
+        "\n[cyan]Cleanup requires a separate sign-in with elevated permissions.[/cyan]\n"
+        "[dim]Sign in with an account that has Application Administrator or Global Administrator role.[/dim]\n"
+    )
+
+    msal_app = msal.PublicClientApplication(
+        client_id=app_client_id,
+        authority=f"https://login.microsoftonline.com/{tenant_id}",
+    )
+
+    flow = msal_app.initiate_device_flow(scopes=_CLEANUP_SCOPES)
+    if "user_code" not in flow:
+        console.print(f"[red]Failed to start sign-in: {flow.get('error_description', 'unknown error')}[/red]")
+        return
+
+    console.print(
+        Panel(
+            f"[bold yellow]Open your browser and go to:[/bold yellow]\n\n"
+            f"  [cyan underline]https://microsoft.com/devicelogin[/cyan underline]\n\n"
+            f"[bold yellow]Enter the code:[/bold yellow]\n\n"
+            f"  [bold white on blue]  {flow['user_code']}  [/bold white on blue]\n\n"
+            f"[dim]Sign in with Application Administrator or Global Administrator credentials.[/dim]\n"
+            f"[dim]Waiting... (expires in {flow.get('expires_in', 900) // 60} minutes)[/dim]",
+            title="[bold cyan]Cleanup Authentication[/bold cyan]",
+            border_style="cyan",
+        )
+    )
+
+    result = msal_app.acquire_token_by_device_flow(flow)
+    if "access_token" not in result:
+        error = result.get("error_description") or result.get("error") or "unknown error"
+        console.print(f"[red]Authentication failed: {error}[/red]")
+        return
+
+    headers = {
+        "Authorization": f"Bearer {result['access_token']}",
+        "Content-Type": "application/json",
+    }
+
+    # Look up the app's object ID by appId
+    resp = requests.get(
+        f"{_GRAPH_BASE}/applications",
+        headers=headers,
+        params={"$filter": f"appId eq '{app_client_id}'", "$select": "id,displayName"},
+        timeout=30,
+    )
+
+    if resp.status_code == 403:
+        console.print(
+            "[red]Permission denied. The signed-in account does not have "
+            "Application Administrator or Global Administrator role.[/red]"
+        )
+        return
+
+    if resp.status_code != 200:
+        console.print(f"[red]Failed to look up app registration: HTTP {resp.status_code}[/red]")
+        return
+
+    apps = resp.json().get("value", [])
+    if not apps:
+        console.print("[yellow]App registration not found — it may have already been deleted.[/yellow]")
+        config_path.unlink(missing_ok=True)
+        console.print("[green]Config file removed.[/green]")
+        return
+
+    obj_id = apps[0]["id"]
+    display_name = apps[0].get("displayName", "Enterprise-Zapp")
+
+    del_resp = requests.delete(
+        f"{_GRAPH_BASE}/applications/{obj_id}",
+        headers=headers,
+        timeout=30,
+    )
+
+    if del_resp.status_code == 204:
+        console.print(f"[bold green]App registration '{display_name}' deleted.[/bold green]")
+        config_path.unlink(missing_ok=True)
+        console.print("[green]Config file removed.[/green]")
+    elif del_resp.status_code == 403:
+        console.print(
+            "[red]Permission denied when deleting. Ensure your account has "
+            "Application Administrator or Global Administrator role.[/red]"
+        )
+    else:
+        try:
+            err_msg = del_resp.json().get("error", {}).get("message", del_resp.text)
+        except Exception:
+            err_msg = del_resp.text
+        console.print(f"[red]Failed to delete app registration: HTTP {del_resp.status_code} — {err_msg}[/red]")
+
 
 BANNER = f"""[bold]
   ███████╗ ███╗  ██╗ ████████╗ ███████╗ ██████╗  ██████╗ ██╗ ███████╗ ███████╗
@@ -126,6 +250,16 @@ BANNER = f"""[bold]
     default=False,
     help="Print a structured JSON summary to stdout after the scan.",
 )
+@click.option(
+    "--cleanup-after",
+    "cleanup_after",
+    is_flag=True,
+    default=False,
+    help=(
+        "After generating the report, prompt to delete the Enterprise-Zapp app registration. "
+        "Requires a second sign-in as Application Administrator or Global Administrator."
+    ),
+)
 @click.version_option(__version__, "--version", "-V")
 def main(
     tenant: str | None,
@@ -139,6 +273,7 @@ def main(
     filter_band: str,
     quiet: bool,
     json_output: bool,
+    cleanup_after: bool,
 ) -> None:
     """
     Enterprise-Zapp — Entra ID Enterprise App Hygiene Scanner.
@@ -166,8 +301,10 @@ def main(
                 "No changes will be made to your Entra ID tenant.\n\n"
                 "[bold yellow]Note:[/bold yellow] [bold]setup.ps1[/bold] created an [bold]Enterprise-Zapp[/bold] "
                 "app registration in your tenant. It only holds read-only Graph permissions, "
-                "but you should delete it when your audit is complete:\n"
-                "  [cyan].\\setup.ps1 -Cleanup[/cyan]  [dim](requires Application Administrator)[/dim]",
+                "but you should delete it when your audit is complete.\n\n"
+                "Delete options:\n"
+                "  [cyan].\\setup.ps1 -Cleanup[/cyan]          [dim]run manually after the scan[/dim]\n"
+                "  [cyan]enterprise-zapp --cleanup-after[/cyan]  [dim]prompts at the end of this run[/dim]",
                 border_style="cyan",
                 title="[bold cyan]Scan Scope[/bold cyan]",
             )
@@ -308,16 +445,28 @@ def main(
         }
         click.echo(json_module.dumps(summary, indent=2))
 
-    # ── Cleanup reminder ─────────────────────────────────────────────────────
-    if not from_cache and not quiet:
+    # ── Cleanup ──────────────────────────────────────────────────────────────
+    config_path = config or DEFAULT_CONFIG_FILE
+    if cleanup_after:
+        if click.confirm(
+            "\nDelete the Enterprise-Zapp app registration now?",
+            default=False,
+        ):
+            _perform_cleanup(config_path)
+        else:
+            console.print(
+                "[dim]Skipped. Run [cyan].\\setup.ps1 -Cleanup[/cyan] "
+                "(Application Administrator) when ready.[/dim]"
+            )
+    elif not quiet:
         console.print(
             Panel(
                 "[bold]Cleanup reminder[/bold]\n"
                 "Setup created an [bold]Enterprise-Zapp[/bold] app registration in your tenant.\n"
-                "Once you are done with your audit, delete it by running:\n\n"
-                "  [cyan bold].\\setup.ps1 -Cleanup[/cyan bold]\n\n"
-                "[dim]Requires Application Administrator or Global Administrator.\n"
-                "The app only holds read-only Graph permissions, but removing it is good hygiene.[/dim]",
+                "Once you are done with your audit, delete it:\n\n"
+                "  [cyan bold].\\setup.ps1 -Cleanup[/cyan bold]                  [dim]manual cleanup[/dim]\n"
+                "  [cyan bold]enterprise-zapp --cleanup-after[/cyan bold]  [dim]prompts at end of next scan[/dim]\n\n"
+                "[dim]Requires Application Administrator or Global Administrator.[/dim]",
                 border_style="yellow",
                 title="[bold yellow]Action Required After Audit[/bold yellow]",
             )
