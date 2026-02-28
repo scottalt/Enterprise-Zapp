@@ -31,7 +31,7 @@
 
 ---
 
-Enterprise-Zapp scans your Microsoft Entra ID tenant for enterprise app hygiene issues — expired credentials, stale apps, orphaned registrations, and over-privileged service principals — and produces a detailed, self-contained HTML report you can open in any browser, share with your team, or drop into an audit package.
+Enterprise-Zapp scans your Microsoft Entra ID tenant for enterprise app hygiene issues — expired credentials, stale apps, orphaned registrations, over-privileged service principals, and Conditional Access coverage gaps — and produces a detailed, self-contained HTML report you can open in any browser, share with your team, or drop into an audit package.
 
 > **Strictly read-only.** Enterprise-Zapp never modifies your tenant. It collects data, surfaces risks, and tells you what to fix. Your team makes the call.
 
@@ -66,6 +66,7 @@ Enterprise-Zapp scans your Microsoft Entra ID tenant for enterprise app hygiene 
 - 🔑 Expired and near-expiry credential tracker
 - 👻 Orphaned apps (no owners, or disabled-account owners)
 - ⚠️ High-privilege apps with no recent activity
+- 🔐 Conditional Access coverage — which apps are protected by enforced CA policies, which are not
 - 🛠️ Cleanup reminder for apps created by Enterprise-Zapp itself
 - 📋 Per-app signals with remediation recommendations
 
@@ -76,15 +77,24 @@ Enterprise-Zapp scans your Microsoft Entra ID tenant for enterprise app hygiene 
 | Signal | Severity |
 |--------|----------|
 | Expired client secrets or certificates | **Critical** |
-| High-privilege permissions on a stale app | **Critical** |
+| High-privilege app permissions on a stale app | **Critical** |
+| High-privilege delegated permissions on a stale app | **Critical** |
 | App has never signed in | High |
 | Stale app — no sign-in in 90+ days | High |
 | No owners defined | High |
 | Owners are disabled/deleted accounts | High |
 | Client secret or cert expiring within 30 days | High |
+| Multi-tenant app with high-privilege permissions | High |
+| Wildcard or localhost redirect URI | High |
+| High-privilege delegated permissions | High |
 | Service principal is disabled but not deleted | Medium |
 | No user/group assignments | Medium |
+| Credentials expiring within 30–90 days | Medium |
+| Implicit grant flow enabled | Medium |
+| No redirect URIs configured (credentials present) | Medium |
+| Multi-tenant app | Medium |
 | Long-lived client secrets (>1 year) | Low |
+| Mixed credential types (secrets and certificates) | Low |
 
 Each app receives a **risk score (0–100)** and a **risk band** (Critical / High / Medium / Low / Clean), with a prioritised primary recommendation.
 
@@ -182,7 +192,13 @@ Options:
   --from-cache CACHE_FILE          Re-use collected data without re-querying Graph API.
   --hide-microsoft / --show-microsoft
                                    Exclude Microsoft first-party apps from the report.
+  --output-format [all|html|csv|pdf]
+                                   Report format(s) to generate. [default: all]
+  --filter-band [all|critical|high|medium|low|clean]
+                                   Only include apps at or above this risk band. [default: all]
   --skip-pdf                       Skip PDF generation.
+  --quiet                          Suppress banner and decorative output.
+  --json-output                    Print a structured JSON summary to stdout after the scan.
   -V, --version                    Show version.
   --help                           Show help.
 ```
@@ -204,6 +220,15 @@ enterprise-zapp --from-cache ./output/raw_contoso_2026-02-27.json
 
 # Write reports to a custom folder
 enterprise-zapp --output ./reports/q1-audit/
+
+# Only include Critical and High risk apps in the report
+enterprise-zapp --filter-band high
+
+# Generate only the HTML report (skip CSV and PDF)
+enterprise-zapp --output-format html
+
+# CI/CD-friendly: quiet output + JSON summary to stdout
+enterprise-zapp --quiet --json-output
 ```
 
 ---
@@ -228,9 +253,13 @@ Enterprise-Zapp requests the following **application, read-only** Microsoft Grap
 | `Application.Read.All` | Read service principals, their owners, and app role assignments | Core scan |
 | `Directory.Read.All` | Read delegated permission grants (`oauth2PermissionGrants`) | Delegated grant analysis |
 | `AuditLog.Read.All` | Read service principal sign-in activity (beta endpoint) | Staleness detection |
+| `Reports.Read.All` | Read service principal sign-in activity reports | Staleness detection |
 | `User.Read.All` | Read disabled/deleted user accounts for orphan detection | Owner validation |
+| `Policy.Read.All` | Read Conditional Access policies | CA coverage analysis |
 
-> **Entra ID P1/P2 required for sign-in activity.** The `AuditLog.Read.All` permission alone is not sufficient — the underlying `servicePrincipalSignInActivities` API requires an Entra ID Premium P1 or P2 license. Without it the scan still runs, but staleness signals will be unavailable. The report notes clearly when this data is missing.
+> **Entra ID P1/P2 required for sign-in activity.** The underlying `servicePrincipalSignInActivities` API requires an Entra ID Premium P1 or P2 license. Without it the scan still runs, but staleness signals will be unavailable. The report notes clearly when this data is missing.
+
+> **`Policy.Read.All` is optional.** If this permission is not granted, the Conditional Access coverage section will be hidden from the report. All other hygiene signals are unaffected.
 
 ---
 
@@ -269,6 +298,7 @@ enterprise-zapp/
 │   ├── graph.py               # Graph API client (pagination, retry, rate limiting)
 │   ├── collector.py           # Data collection orchestration
 │   ├── analyzer.py            # Signal evaluation + risk scoring engine
+│   ├── ca_analyzer.py         # Conditional Access coverage analysis
 │   ├── reporter.py            # HTML / CSV / PDF generation
 │   └── cli.py                 # Click CLI entrypoint + banner
 ├── templates/
@@ -311,6 +341,9 @@ The scan still runs. Sign-in activity data will be unavailable, so staleness sig
 
 **Why does my report show mostly Microsoft apps?**
 Microsoft first-party apps (Teams, SharePoint, Viva, etc.) are service principals in every tenant. Use `--hide-microsoft` or click the "Hide Microsoft Apps" toggle in the report to focus on your own apps.
+
+**The Conditional Access section is missing from my report.**
+The CA coverage analysis requires the `Policy.Read.All` permission. If `setup.ps1` was run before this permission was added, re-run it to update the app registration and re-consent. If you intentionally skipped this permission, the section is hidden and all other signals are unaffected.
 
 ---
 
