@@ -125,7 +125,10 @@ class GraphClient:
 
     def get_sp_app_role_assignments(self, sp_id: str) -> list[dict]:
         """Users and groups assigned to this service principal."""
-        return list(self.get_paged(f"/servicePrincipals/{sp_id}/appRoleAssignments"))
+        try:
+            return list(self.get_paged(f"/servicePrincipals/{sp_id}/appRoleAssignments"))
+        except (PermissionError, RuntimeError):
+            return []
 
     def get_sp_owners(self, sp_id: str) -> list[dict]:
         """Owners of this service principal."""

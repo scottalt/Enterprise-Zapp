@@ -34,8 +34,9 @@ def load_config(config_path: Path | None = None) -> dict:
         console.print(
             Panel(
                 "[bold red]Config file not found.[/bold red]\n\n"
-                "Run [cyan]setup.ps1[/cyan] first to create an app registration,\n"
-                "or pass [cyan]--tenant[/cyan] and [cyan]--client-id[/cyan] flags directly.",
+                "Run [cyan].\\setup.ps1[/cyan] from the repository root to create an app registration.\n"
+                "Requires [bold]PowerShell 7+[/bold] and a [bold]Privileged Role Administrator[/bold] account.\n\n"
+                "Or pass [cyan]--tenant[/cyan] and [cyan]--client-id[/cyan] flags directly.",
                 title="[red]Setup Required[/red]",
                 border_style="red",
             )
