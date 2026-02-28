@@ -485,6 +485,8 @@
         Enterprise-Zapp created the following app registration(s) during setup. Please delete them
         after your audit to avoid leaving unused app registrations with active credentials in your tenant.
         Run: <code>.\setup.ps1 -Cleanup</code>
+        <br/><small style="opacity:0.75;">Cleanup requires the <strong>Application Administrator</strong> or <strong>Global Administrator</strong> role —
+        this is different from the Privileged Role Administrator role used during setup.</small>
         <ul class="callout-artifact-list">
           {% for app in tool_artifact_apps %}
           <li>{{ app.display_name }} <span style="opacity:0.6;">({{ app.app_id }})</span></li>

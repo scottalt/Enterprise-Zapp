@@ -45,7 +45,7 @@ BANNER = f"""[bold]
                      ╚══════╝ ╚═╝  ╚═╝ ╚═╝      ╚═╝
 [/bold green]
 [dim]  Entra ID Enterprise App Hygiene Scanner  ·  v{__version__}[/dim]
-[bold green]  Read-Only. No changes will be made to your Entra ID tenant.[/bold green]
+[bold green]  Scan is Read-Only. The scan makes no changes to your Entra ID tenant.[/bold green]
 [dim]  By Scott Altiparmak · https://www.linkedin.com/in/scottaltiparmak/[/dim]
 """
 
@@ -169,9 +169,11 @@ def main(
 
         console.print(
             Panel(
-                "[bold yellow]This tool is strictly read-only.[/bold yellow]\n"
+                "[bold yellow]The scan is read-only.[/bold yellow]\n"
                 "It collects data from the Microsoft Graph API and produces a report.\n"
-                "[bold]No changes will be made to your Entra ID tenant.[/bold]",
+                "[bold]No changes will be made to your Entra ID tenant during the scan.[/bold]\n"
+                "[dim]Note: setup.ps1 created one app registration in your tenant. "
+                "Run [cyan].\\setup.ps1 -Cleanup[/cyan] (as Application Administrator) to remove it when done.[/dim]",
                 border_style="yellow",
             )
         )

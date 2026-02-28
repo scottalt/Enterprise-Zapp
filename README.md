@@ -24,7 +24,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="MIT License"/>
   <img src="https://img.shields.io/badge/python-3.10%2B-blue.svg" alt="Python 3.10+"/>
-  <img src="https://img.shields.io/badge/Entra%20ID-Read--Only-brightgreen" alt="Read Only"/>
+  <img src="https://img.shields.io/badge/Scan-Read--Only-brightgreen" alt="Scan is Read-Only"/>
   <img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome"/>
   <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey" alt="Platform"/>
 </p>
@@ -33,7 +33,9 @@
 
 Enterprise-Zapp scans your Microsoft Entra ID tenant for enterprise app hygiene issues — expired credentials, stale apps, orphaned registrations, over-privileged service principals, and Conditional Access coverage gaps — and produces a detailed, self-contained HTML report you can open in any browser, share with your team, or drop into an audit package.
 
-> **Strictly read-only.** Enterprise-Zapp never modifies your tenant. It collects data, surfaces risks, and tells you what to fix. Your team makes the call.
+> **The scan is read-only.** Once set up, Enterprise-Zapp only reads data from the Microsoft Graph API — it never modifies, disables, or deletes anything in your tenant. It collects data, surfaces risks, and tells you what to fix. Your team makes the call.
+>
+> **Setup creates one app registration.** `setup.ps1` is a one-time write operation — it registers a temporary app in your tenant and grants admin consent. Cleanup (`setup.ps1 -Cleanup`) deletes it. Both operations require an admin role; see [Required Entra ID Roles](#required-entra-id-roles) for the specific requirements.
 
 ---
 
@@ -106,11 +108,15 @@ Each app receives a **risk score (0–100)** and a **risk band** (Critical / Hig
 
 ## What It Does NOT Do
 
+The **scan** (steps 2–3) never modifies your tenant:
+
 - Does **not** modify, disable, or delete any app or service principal
 - Does **not** revoke credentials or permissions
 - Does **not** send data to any external service
 - Does **not** require persistent infrastructure or a deployed application
 - Does **not** store credentials — authentication uses Microsoft's device code flow
+
+> **Note:** `setup.ps1` (step 1) creates one temporary app registration in your tenant, and `setup.ps1 -Cleanup` deletes it. These are the only write operations — both require an admin role.
 
 ---
 
@@ -160,7 +166,7 @@ Open PowerShell as a **Privileged Role Administrator** (or Global Administrator)
 .\setup.ps1
 ```
 
-This creates a temporary, read-only app registration in your tenant, grants admin consent for the required permissions, and saves the client ID and tenant ID to `enterprise_zapp_config.json`.
+This creates a temporary app registration in your tenant, grants admin consent for the required read-only Graph permissions, and saves the client ID and tenant ID to `enterprise_zapp_config.json`.
 
 > **Takes ~30 seconds.** No persistent infrastructure. Deletable immediately after the scan.
 
@@ -203,6 +209,8 @@ Reports are written to `./output/` when the scan completes.
 ```
 
 Deletes the temporary app registration from your tenant.
+
+> **Cleanup requires a different role than setup.** Deleting an app registration requires the **Application Administrator** or **Global Administrator** role. The Privileged Role Administrator role used for setup (admin consent) does not have delete rights over app registrations. See [Required Entra ID Roles](#required-entra-id-roles).
 
 ---
 
@@ -343,6 +351,17 @@ The scan authenticates as the app registration (device code flow) and calls read
 However, the **person authenticating** needs an Entra ID account in the tenant. No specific Entra ID directory role is required to complete device code authentication as a user, as long as admin consent was granted in Step 1.
 
 > **Tip for auditors:** A dedicated **Security Reader** service account is a clean fit for running scans. Security Reader covers read access to security-related data including sign-in activity reports.
+
+### Step 3 — Cleanup (`setup.ps1 -Cleanup`)
+
+Cleanup deletes the app registration created in Step 1. Deleting app registrations is a different operation from granting admin consent and requires a different role.
+
+| Role | Notes |
+|------|-------|
+| **Application Administrator** | Can delete app registrations. Minimum required for cleanup. |
+| Global Administrator | Also works. |
+
+> **Why is this different from setup?** Privileged Role Administrator can grant admin consent for application permissions, but it does **not** grant the ability to delete app registrations. Cleanup requires `Application.ReadWrite.All` write-delete rights, which are only held by Application Administrator and above.
 
 ---
 
