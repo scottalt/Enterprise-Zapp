@@ -43,10 +43,25 @@ def load_config(config_path: Path | None = None) -> dict:
         )
         sys.exit(1)
     try:
-        return json.loads(path.read_text(encoding="utf-8-sig"))
+        config = json.loads(path.read_text(encoding="utf-8-sig"))
     except json.JSONDecodeError as exc:
         console.print(f"[red]Error reading config file {path}: {exc}[/red]")
         sys.exit(1)
+
+    missing = [k for k in ("tenant_id", "client_id") if not config.get(k)]
+    if missing:
+        console.print(
+            Panel(
+                f"[bold red]Config file is missing required fields:[/bold red] {', '.join(missing)}\n\n"
+                f"The file at [cyan]{path}[/cyan] may be corrupted or from an older version.\n"
+                "Delete it and re-run [cyan].\\setup.ps1[/cyan] to regenerate.",
+                title="[red]Invalid Config[/red]",
+                border_style="red",
+            )
+        )
+        sys.exit(1)
+
+    return config
 
 
 def acquire_token(tenant_id: str, client_id: str) -> str:

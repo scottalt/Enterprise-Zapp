@@ -26,6 +26,9 @@ console = Console()
 
 TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
 
+# Sentinel used to sort apps with no sign-in data to the bottom of stale lists.
+_NO_SIGNIN_SORT_KEY = 999_999
+
 
 # ── Jinja2 filters ─────────────────────────────────────────────────────────────
 
@@ -141,7 +144,7 @@ def generate_html(
     critical_high = [r for r in results if r.risk_band in ("critical", "high")]
     stale_apps = sorted(
         [r for r in results if any(s.key in ("stale", "never_signed_in") for s in r.signals)],
-        key=lambda r: (r.days_since_sign_in or 999999),
+        key=lambda r: (r.days_since_sign_in or _NO_SIGNIN_SORT_KEY),
         reverse=True,
     )
     credential_apps = [r for r in results if r.has_expired_secret or r.has_expired_cert or r.has_near_expiry_secret or r.has_near_expiry_cert]

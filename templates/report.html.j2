@@ -552,7 +552,7 @@
   <div class="section" id="sec-inventory">
     <div class="section-title">
       Full App Inventory
-      <div class="section-subtitle">All {{ total_apps }} enterprise apps — sortable and filterable</div>
+      <div class="section-subtitle">{% if filter_band != 'all' %}{{ total_apps }} of {{ total_scanned }} enterprise apps (filtered to <strong>{{ filter_band }}</strong> and above){% else %}All {{ total_apps }} enterprise apps{% endif %} — sortable and filterable</div>
     </div>
     <div class="band-filters" id="inv-band-filters">
       <button class="band-btn active-all" data-band="" onclick="setBandFilter(this, '')">All</button>
@@ -669,7 +669,7 @@
             <td data-val="{{ app.days_since_sign_in if app.days_since_sign_in is not none else 99999 }}">{{ app.last_sign_in | format_date if app.last_sign_in else '—' }}</td>
             <td data-val="{{ app.owner_count }}">{{ app.owner_count }}</td>
             <td data-val="{{ app.assignment_count }}">{{ app.assignment_count }}</td>
-            <td style="font-size: 12px; color: var(--muted); max-width: 220px;">{{ app.primary_recommendation[:80] }}{% if app.primary_recommendation | length > 80 %}…{% endif %}</td>
+            <td style="font-size: 12px; color: var(--muted); max-width: 220px;">{{ app.primary_recommendation[:120] }}{% if app.primary_recommendation | length > 120 %}…{% endif %}</td>
           </tr>
           <tr class="expand-row" id="crit-{{ loop.index }}">
             <td colspan="7">
@@ -902,12 +902,22 @@
 
     {% if not ca_available %}
     <div class="ca-unavailable">
-      <h3>&#128274; CA Data Unavailable</h3>
+      {% if ca_permission_granted is sameas false %}
+      <h3>&#128274; Permission Not Granted — Coverage Unknown</h3>
       <p>
-        Conditional Access policy data could not be retrieved — <code>Policy.Read.All</code> is not granted or the endpoint is unreachable.<br><br>
-        Re-run <code>.\setup.ps1</code> (it now includes this permission automatically), then run a fresh scan.
+        The <code>Policy.Read.All</code> permission was not granted, so Conditional Access policy data could not be retrieved.
+        CA coverage for this tenant is <strong>unknown</strong> — this does not mean no policies exist.<br><br>
+        Re-run <code>.\setup.ps1</code> (it now includes this permission automatically) to enable CA coverage analysis.
         Note: Conditional Access requires <strong>Azure AD Premium P1</strong> or higher.
       </p>
+      {% else %}
+      <h3>&#128274; CA Data Unavailable</h3>
+      <p>
+        Conditional Access policy data could not be retrieved — the endpoint may be unreachable or this cache predates CA support.<br><br>
+        Run a fresh scan to populate this section.
+        Note: Conditional Access requires <strong>Azure AD Premium P1</strong> or higher.
+      </p>
+      {% endif %}
     </div>
 
     {% else %}

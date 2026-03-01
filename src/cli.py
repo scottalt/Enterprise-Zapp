@@ -33,33 +33,55 @@ _GRAPH_BASE = "https://graph.microsoft.com/v1.0"
 _CLEANUP_SCOPES = ["https://graph.microsoft.com/Application.ReadWrite.All"]
 
 
-def _perform_cleanup(config_path: Path) -> None:
+def _perform_cleanup(config_path: Path, dry_run: bool = False) -> None:
     """
     Re-authenticate as Application Administrator and delete the Enterprise-Zapp
     app registration via Microsoft Graph, then remove the local config file.
 
     Uses a fresh device code flow requesting Application.ReadWrite.All.
     The signed-in account must hold Application Administrator or Global Administrator.
+
+    If dry_run is True, looks up and displays the app registration but does not delete it.
     """
     import msal
     import requests
 
     if not config_path.exists():
         console.print(
-            "[yellow]Config file not found — the app registration may already have been deleted.[/yellow]"
+            Panel(
+                "[yellow]Config file not found.[/yellow]\n"
+                "The app registration may already have been deleted, or setup.ps1 was not run.",
+                title="[yellow]Nothing to Clean Up[/yellow]",
+                border_style="yellow",
+            )
         )
         return
 
     try:
         cfg = json.loads(config_path.read_text(encoding="utf-8-sig"))
     except (json.JSONDecodeError, OSError) as exc:
-        console.print(f"[red]Could not read config file: {exc}[/red]")
+        console.print(Panel(f"[red]Could not read config file: {exc}[/red]", border_style="red"))
         return
 
     app_client_id = cfg.get("client_id")
     tenant_id = cfg.get("tenant_id")
     if not app_client_id or not tenant_id:
-        console.print("[red]Config file is missing client_id or tenant_id.[/red]")
+        console.print(Panel("[red]Config file is missing client_id or tenant_id.[/red]", border_style="red"))
+        return
+
+    if dry_run:
+        console.print(
+            Panel(
+                f"[bold yellow]Dry run — no changes will be made.[/bold yellow]\n\n"
+                f"Would delete app registration:\n"
+                f"  [bold]Name:[/bold]   {cfg.get('app_name', 'Enterprise-Zapp')}\n"
+                f"  [bold]App ID:[/bold] {app_client_id}\n"
+                f"  [bold]Tenant:[/bold] {cfg.get('tenant_name', tenant_id)} ({tenant_id})\n\n"
+                "Re-run without [cyan]--cleanup-dry-run[/cyan] to delete for real.",
+                title="[yellow]Cleanup Dry Run[/yellow]",
+                border_style="yellow",
+            )
+        )
         return
 
     console.print(
@@ -122,9 +144,15 @@ def _perform_cleanup(config_path: Path) -> None:
 
     apps = resp.json().get("value", [])
     if not apps:
-        console.print("[yellow]App registration not found — it may have already been deleted.[/yellow]")
         config_path.unlink(missing_ok=True)
-        console.print("[green]Config file removed.[/green]")
+        console.print(
+            Panel(
+                "[yellow]App registration not found — it may have already been deleted.[/yellow]\n"
+                "[green]Config file removed.[/green]",
+                title="[yellow]Already Gone[/yellow]",
+                border_style="yellow",
+            )
+        )
         return
 
     obj_id = apps[0]["id"]
@@ -137,20 +165,42 @@ def _perform_cleanup(config_path: Path) -> None:
     )
 
     if del_resp.status_code == 204:
-        console.print(f"[bold green]App registration '{display_name}' deleted.[/bold green]")
         config_path.unlink(missing_ok=True)
-        console.print("[green]Config file removed.[/green]")
+        console.print(
+            Panel(
+                f"[bold green]App registration deleted successfully.[/bold green]\n\n"
+                f"  [bold]Name:[/bold]   {display_name}\n"
+                f"  [bold]App ID:[/bold] {app_client_id}\n\n"
+                "[green]Config file removed.[/green]",
+                title="[bold green]Cleanup Complete[/bold green]",
+                border_style="green",
+            )
+        )
     elif del_resp.status_code == 403:
         console.print(
-            "[red]Permission denied when deleting. Ensure your account has "
-            "Application Administrator or Global Administrator role.[/red]"
+            Panel(
+                "[red]Permission denied.[/red] The signed-in account does not have "
+                "[bold]Application Administrator[/bold] or [bold]Global Administrator[/bold] role.\n\n"
+                "Ask your Global Administrator to delete the app registration manually, or sign in "
+                "with a higher-privileged account and re-run [cyan]--cleanup-after[/cyan].",
+                title="[red]Permission Denied[/red]",
+                border_style="red",
+            )
         )
     else:
         try:
             err_msg = del_resp.json().get("error", {}).get("message", del_resp.text)
         except Exception:
             err_msg = del_resp.text
-        console.print(f"[red]Failed to delete app registration: HTTP {del_resp.status_code} — {err_msg}[/red]")
+        console.print(
+            Panel(
+                f"[red]Failed to delete app registration.[/red]\n\n"
+                f"HTTP {del_resp.status_code}: {err_msg}\n\n"
+                "You can delete it manually in the [cyan]Entra admin center → App registrations[/cyan].",
+                title="[red]Deletion Failed[/red]",
+                border_style="red",
+            )
+        )
 
 
 BANNER = f"""[bold]
@@ -235,7 +285,11 @@ BANNER = f"""[bold]
     default="all",
     show_default=True,
     type=click.Choice(["all", "critical", "high", "medium", "low", "clean"], case_sensitive=False),
-    help="Only include apps at or above this risk band in the report.",
+    help=(
+        "Only include apps at or above this risk band in the report. "
+        "Exit codes always reflect the full pre-filter results — a critical app "
+        "not shown in the report will still produce exit code 3."
+    ),
 )
 @click.option(
     "--quiet",
@@ -260,6 +314,16 @@ BANNER = f"""[bold]
         "Requires a second sign-in as Application Administrator or Global Administrator."
     ),
 )
+@click.option(
+    "--cleanup-dry-run",
+    "cleanup_dry_run",
+    is_flag=True,
+    default=False,
+    help=(
+        "Show what the cleanup would delete (app name, ID, tenant) without making any changes. "
+        "Use to verify before running --cleanup-after."
+    ),
+)
 @click.version_option(__version__, "--version", "-V")
 def main(
     tenant: str | None,
@@ -274,6 +338,7 @@ def main(
     quiet: bool,
     json_output: bool,
     cleanup_after: bool,
+    cleanup_dry_run: bool,
 ) -> None:
     """
     Enterprise-Zapp — Entra ID Enterprise App Hygiene Scanner.
@@ -447,7 +512,9 @@ def main(
 
     # ── Cleanup ──────────────────────────────────────────────────────────────
     config_path = config or DEFAULT_CONFIG_FILE
-    if cleanup_after:
+    if cleanup_dry_run:
+        _perform_cleanup(config_path, dry_run=True)
+    elif cleanup_after:
         if click.confirm(
             "\nDelete the Enterprise-Zapp app registration now?",
             default=False,

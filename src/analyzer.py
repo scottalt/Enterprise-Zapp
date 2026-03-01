@@ -103,6 +103,10 @@ class AppResult:
     # Owner detail
     disabled_owner_count: int = 0
 
+    # Pre-cap score for sorting within the same risk band (e.g. an app with
+    # raw score 145 sorts above one with raw score 105, both capped at 100).
+    risk_score_raw: int = 0
+
     # Informational metadata (no score impact)
     description: str | None = None
     notes: str | None = None
@@ -282,10 +286,12 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
     is_tool_artifact = display_name == "Enterprise-Zapp"
 
     owners: list[dict] = sp.get("_owners", [])
-    # _appPermissions = users/groups assigned TO this app (appRoleAssignedTo)
+    # _appPermissions (appRoleAssignedTo): users/groups assigned TO this app.
+    # Local variable named `assignments` — used for the no_assignments signal.
     assignments: list[dict] = sp.get("_appPermissions", [])
     delegated_grants: list[dict] = sp.get("_delegatedGrants", [])
-    # _assignments = API permissions granted TO this SP (appRoleAssignments)
+    # _assignments (appRoleAssignments): API permissions this SP has been granted
+    # (e.g. User.Read.All). Local variable named `app_permissions`.
     app_permissions: list[dict] = sp.get("_assignments", [])
     disabled_owner_ids: list[str] = sp.get("_disabledOwnerIds", [])
     sign_in: dict = sp.get("_signInActivity", {})
@@ -302,8 +308,9 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
     last_sign_in_dt = _parse_dt(last_sign_in_raw)
     days_since = _days_since(last_sign_in_dt)
 
-    # Microsoft first-party apps have unpredictable sign-in patterns and cannot
-    # be meaningfully flagged for staleness — skip these signals for them.
+    # Microsoft first-party apps skip: staleness, ownership, no_assignments, and
+    # multi_tenant signals. They are managed by Microsoft and these signals are
+    # either non-actionable or expected by design.
     if not is_microsoft_first_party:
         if last_sign_in_dt is None and sign_in:
             # Sign-in data available but app has never signed in
@@ -548,6 +555,10 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
     )
     stale_signal = any(s.key in ("stale", "never_signed_in") for s in signals)
     if has_high_privilege and stale_signal:
+        # Replace the underlying stale/never_signed_in signal with the more
+        # specific composite signal. Score contribution from the stale signal
+        # is already included; the composite adds its own on top.
+        signals = [s for s in signals if s.key not in ("stale", "never_signed_in")]
         signals.append(Signal(
             key="high_privilege_stale",
             severity="critical",
@@ -574,6 +585,8 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
         unique_scopes = sorted(set(matched_delegated_scopes))
         scope_list = ", ".join(unique_scopes)
         if stale_signal:
+            # Replace underlying stale/never_signed_in with the composite signal.
+            signals = [s for s in signals if s.key not in ("stale", "never_signed_in")]
             signals.append(Signal(
                 key="excessive_delegated_permissions",
                 severity="critical",
@@ -683,7 +696,8 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
         sig.recommendation = _recommendation_for_signal(sig.key)
         sig.doc_url = _doc_url_for_signal(sig.key)
 
-    # Cap score at 100
+    # Store raw score before capping (used for sorting within the same band)
+    score_raw = score
     score = min(score, 100)
 
     return AppResult(
@@ -704,6 +718,7 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
         has_high_privilege=has_high_privilege,
         signals=signals,
         risk_score=score,
+        risk_score_raw=score_raw,
         risk_band=_risk_band(score),
         primary_recommendation=_primary_recommendation(signals),
         tags=sp.get("tags", []),
@@ -731,7 +746,7 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
 def analyze_all(raw_data: dict, stale_days: int = DEFAULT_STALE_DAYS) -> list[AppResult]:
     """Analyze all apps from collected raw data. Returns sorted list (highest risk first)."""
     results = [analyze_app(sp, stale_days) for sp in raw_data.get("apps", [])]
-    return sorted(results, key=lambda r: (-r.risk_score, r.display_name.lower()))
+    return sorted(results, key=lambda r: (-r.risk_score_raw, r.display_name.lower()))
 
 
 def band_counts(results: list[AppResult]) -> dict[str, int]:

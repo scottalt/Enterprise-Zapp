@@ -123,9 +123,12 @@ def collect(client: GraphClient, output_dir: Path, cache_path: Path | None = Non
             enriched.append(
                 {
                     **sp,
-                    # Application-sourced fields (override empty SP values)
-                    "passwordCredentials": app_cred.get("passwordCredentials") or sp.get("passwordCredentials") or [],
-                    "keyCredentials": app_cred.get("keyCredentials") or sp.get("keyCredentials") or [],
+                    # Application-sourced fields (override SP values when the app
+                    # registration was found). Use key presence, not truthiness,
+                    # so an empty list [] from the Application object is respected
+                    # rather than falling through to stale SP-level data.
+                    "passwordCredentials": app_cred["passwordCredentials"] if "passwordCredentials" in app_cred else (sp.get("passwordCredentials") or []),
+                    "keyCredentials": app_cred["keyCredentials"] if "keyCredentials" in app_cred else (sp.get("keyCredentials") or []),
                     "oauth2AllowImplicitFlow": app_cred.get("oauth2AllowImplicitFlow", sp.get("oauth2AllowImplicitFlow", False)),
                     "oauth2AllowIdTokenIssuance": app_cred.get("oauth2AllowIdTokenIssuance", sp.get("oauth2AllowIdTokenIssuance", False)),
                     # SP-sourced enrichment keys
