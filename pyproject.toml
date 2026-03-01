@@ -9,7 +9,7 @@ description = "Read-only Entra ID enterprise app hygiene scanner — identify st
 readme = "README.md"
 license = { file = "LICENSE" }
 authors = [
-    { name = "Scott Altiparmak", email = "" },
+    { name = "Scott Altiparmak" },
 ]
 requires-python = ">=3.10"
 keywords = [
