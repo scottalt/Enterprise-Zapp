@@ -271,15 +271,12 @@ function New-AppRegistration {
     Write-Host "  Client ID: $($App.AppId)" -ForegroundColor White
     Write-Host "  Config:    $ConfigFile" -ForegroundColor White
     Write-Host ""
-    Write-Host "  Next step — install and run the scan:" -ForegroundColor Yellow
-    Write-Host "    pip install -e ." -ForegroundColor White
-    Write-Host "    enterprise-zapp" -ForegroundColor White
-    Write-Host ""
-    Write-Host "  Already installed? Just run:" -ForegroundColor Gray
-    Write-Host "    enterprise-zapp" -ForegroundColor White
-    Write-Host ""
-    Write-Host "  Prefer to run directly from source (no install):" -ForegroundColor Gray
+    Write-Host "  Next step — run the scan:" -ForegroundColor Yellow
     Write-Host "    python -m src.cli" -ForegroundColor White
+    Write-Host ""
+    Write-Host "  Optional: install as a CLI command:" -ForegroundColor Gray
+    Write-Host "    pip install -e ." -ForegroundColor Gray
+    Write-Host "    enterprise-zapp" -ForegroundColor Gray
     Write-Host ""
     Write-Host "  To clean up the app registration after your scan:" -ForegroundColor Gray
     Write-Host "    .\setup.ps1 -Cleanup" -ForegroundColor Gray

@@ -40,7 +40,7 @@ Enterprise-Zapp has a three-phase lifecycle. Each phase has a distinct impact on
 | Phase | Command | Tenant impact | Who runs it |
 |-------|---------|--------------|-------------|
 | **1. Setup** | `.\setup.ps1` | **Creates** one app registration (`Enterprise-Zapp`) with read-only Graph permissions. This is the only write operation. | Privileged Role Administrator or Global Administrator |
-| **2. Scan** | `enterprise-zapp` | **Read-only.** Queries Graph API and writes a report to your local machine. Zero changes to the tenant. | Anyone with an Entra ID account in the tenant |
+| **2. Scan** | `python -m src.cli` | **Read-only.** Queries Graph API and writes a report to your local machine. Zero changes to the tenant. | Anyone with an Entra ID account in the tenant |
 | **3. Cleanup** | `.\setup.ps1 -Cleanup` | **Deletes** the app registration created in step 1. | Application Administrator or Global Administrator |
 
 > Cleanup requires a **different role** from setup. Privileged Role Administrator (needed to grant admin consent during setup) cannot delete app registrations. Deletion requires Application Administrator or Global Administrator. See [Required Entra ID Roles](#required-entra-id-roles).
@@ -185,20 +185,18 @@ pip install -r requirements.txt
 
 ### Step 3 — Run the scan
 
-**Option A — install as a command (recommended):**
+```bash
+python -m src.cli
+```
+
+**Optional — install as a CLI command:**
 
 ```bash
 pip install -e .
 enterprise-zapp
 ```
 
-`pip install -e .` registers the `enterprise-zapp` command in your terminal so you can call it from anywhere.
-
-**Option B — run directly with Python (no install needed):**
-
-```bash
-python -m src.cli
-```
+> **Windows note:** on Microsoft Store Python, `pip install -e .` puts the `enterprise-zapp` script in a user Scripts folder that isn't on PATH by default, so the command may not be found. `python -m src.cli` always works without any PATH changes.
 
 You'll be prompted to authenticate via Microsoft's device code flow — no passwords stored, no service accounts required:
 
