@@ -276,13 +276,13 @@
     background: rgba(234,179,8,0.08); border: 1px solid rgba(234,179,8,0.3); color: #fde047;
   }
   .callout-warning strong { color: #fbbf24; }
-  .callout-artifact-list {
-    list-style: none; margin-top: 8px;
+  .artifact-name-badge {
+    display: inline-flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+    background: rgba(234,179,8,0.15); border: 1px solid rgba(234,179,8,0.4);
+    border-radius: 6px; padding: 7px 12px; margin: 6px 0 10px 0;
+    font-weight: 600; font-size: 14px; color: #fbbf24;
   }
-  .callout-artifact-list li {
-    padding: 3px 0; font-family: monospace; font-size: 12px;
-  }
-  .callout-artifact-list li::before { content: '• '; color: #fbbf24; }
+  .artifact-app-id { font-family: monospace; font-size: 11px; opacity: 0.65; font-weight: 400; }
 
   /* ── Conditional Access section ─────────────────────────────────────── */
   .ca-section-title {
@@ -377,6 +377,12 @@
     margin-top: 5px;
     line-height: 1.5;
   }
+  .doc-link {
+    display: inline-block; margin-left: 8px;
+    font-size: 11px; color: var(--accent); opacity: 0.75;
+    text-decoration: none; border-bottom: 1px dashed var(--accent);
+  }
+  .doc-link:hover { opacity: 1; }
 
   /* ── Muted empty-state cell ──────────────────────────────────────────── */
   td.muted { color: var(--muted); font-style: italic; text-align: center; padding: 20px 14px; }
@@ -493,17 +499,15 @@
     <div class="callout callout-warning">
       <div class="callout-icon">&#9888;</div>
       <div class="callout-body">
-        <strong>Cleanup Reminder — Enterprise-Zapp Scan App(s)</strong>
-        Enterprise-Zapp created the following app registration(s) during setup. Please delete them
-        after your audit to avoid leaving unused app registrations with active credentials in your tenant.
-        Run: <code>.\setup.ps1 -Cleanup</code>
-        <br/><small style="opacity:0.75;">Cleanup requires the <strong>Application Administrator</strong> or <strong>Global Administrator</strong> role —
-        this is different from the Privileged Role Administrator role used during setup.</small>
-        <ul class="callout-artifact-list">
-          {% for app in tool_artifact_apps %}
-          <li>{{ app.display_name }} <span style="opacity:0.6;">({{ app.app_id }})</span></li>
-          {% endfor %}
-        </ul>
+        <strong>Cleanup Reminder</strong>
+        {% for app in tool_artifact_apps %}
+        <div class="artifact-name-badge">
+          {{ app.display_name }}<span class="artifact-app-id">{{ app.app_id }}</span>
+        </div>
+        {% endfor %}
+        This app registration was created by Enterprise-Zapp's setup.ps1 script. Delete it after your audit to avoid leaving unused credentials in your tenant.
+        <div style="margin-top: 8px;">Run: <code>.\setup.ps1 -Cleanup</code> &nbsp;·&nbsp; or re-run the scan with <code>--cleanup-after</code></div>
+        <div style="margin-top: 6px;"><small style="opacity:0.75;">Cleanup requires the <strong>Application Administrator</strong> or <strong>Global Administrator</strong> role — different from the Privileged Role Administrator role used during setup.</small></div>
       </div>
     </div>
     {% endif %}
@@ -578,7 +582,7 @@
         </thead>
         <tbody>
           {% for app in all_apps %}
-          <tr data-band="{{ app.risk_band }}" data-name="{{ app.display_name | lower }}" data-appid="{{ app.app_id | lower }}" data-microsoft="{{ 'true' if app.is_microsoft_first_party else 'false' }}" data-artifact="{{ 'true' if app.is_tool_artifact else 'false' }}">
+          <tr class="expand-trigger" data-band="{{ app.risk_band }}" data-name="{{ app.display_name | lower }}" data-appid="{{ app.app_id | lower }}" data-microsoft="{{ 'true' if app.is_microsoft_first_party else 'false' }}" data-artifact="{{ 'true' if app.is_tool_artifact else 'false' }}" onclick="toggleRow('inv-{{ loop.index }}', this)">
             <td>{{ app_cell(app) }}</td>
             <td data-val="{{ app.risk_score }}">
               <div class="score-bar-wrap">
@@ -598,10 +602,26 @@
             <td>
               <div class="signals" style="gap: 4px;">
                 {% for sig in app.signals[:3] %}
-                <span class="signal-chip signal-{{ sig.severity }}" title="{{ sig.detail }}">{{ sig.title }}</span>
+                <span class="signal-chip signal-{{ sig.severity }}">{{ sig.title }}</span>
                 {% endfor %}
                 {% if app.signals | length > 3 %}
                 <span style="color: var(--muted); font-size: 11px;">+{{ app.signals | length - 3 }} more</span>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          <tr class="expand-row" id="inv-{{ loop.index }}">
+            <td colspan="8">
+              <div class="expand-content">
+                {% for sig in app.signals %}
+                <div class="signal-block">
+                  <span class="signal-chip signal-{{ sig.severity }}">{{ sig.title }}</span>
+                  {% if sig.detail %}<p class="signal-detail-text">{{ sig.detail }}</p>{% endif %}
+                  {% if sig.recommendation %}<p class="signal-rec-text">→ {{ sig.recommendation }}{% if sig.doc_url %}<a href="{{ sig.doc_url }}" target="_blank" rel="noopener" class="doc-link">Learn more ↗</a>{% endif %}</p>{% endif %}
+                </div>
+                {% endfor %}
+                {% if not app.signals %}
+                <p style="color: var(--muted); font-style: italic; font-size: 13px;">No signals — this app passed all hygiene checks.</p>
                 {% endif %}
               </div>
             </td>
@@ -658,7 +678,7 @@
                 <div class="signal-block">
                   <span class="signal-chip signal-{{ sig.severity }}">{{ sig.title }}</span>
                   {% if sig.detail %}<p class="signal-detail-text">{{ sig.detail }}</p>{% endif %}
-                  {% if sig.recommendation %}<p class="signal-rec-text">→ {{ sig.recommendation }}</p>{% endif %}
+                  {% if sig.recommendation %}<p class="signal-rec-text">→ {{ sig.recommendation }}{% if sig.doc_url %}<a href="{{ sig.doc_url }}" target="_blank" rel="noopener" class="doc-link">Learn more ↗</a>{% endif %}</p>{% endif %}
                 </div>
                 {% endfor %}
               </div>
@@ -707,7 +727,7 @@
                 <div class="signal-block">
                   <span class="signal-chip signal-{{ sig.severity }}">{{ sig.title }}</span>
                   {% if sig.detail %}<p class="signal-detail-text">{{ sig.detail }}</p>{% endif %}
-                  {% if sig.recommendation %}<p class="signal-rec-text">→ {{ sig.recommendation }}</p>{% endif %}
+                  {% if sig.recommendation %}<p class="signal-rec-text">→ {{ sig.recommendation }}{% if sig.doc_url %}<a href="{{ sig.doc_url }}" target="_blank" rel="noopener" class="doc-link">Learn more ↗</a>{% endif %}</p>{% endif %}
                 </div>
                 {% endfor %}
               </div>
@@ -768,7 +788,7 @@
                 <div class="signal-block">
                   <span class="signal-chip signal-{{ sig.severity }}">{{ sig.title }}</span>
                   {% if sig.detail %}<p class="signal-detail-text">{{ sig.detail }}</p>{% endif %}
-                  {% if sig.recommendation %}<p class="signal-rec-text">→ {{ sig.recommendation }}</p>{% endif %}
+                  {% if sig.recommendation %}<p class="signal-rec-text">→ {{ sig.recommendation }}{% if sig.doc_url %}<a href="{{ sig.doc_url }}" target="_blank" rel="noopener" class="doc-link">Learn more ↗</a>{% endif %}</p>{% endif %}
                 </div>
                 {% endfor %}
               </div>
@@ -815,7 +835,7 @@
                 <div class="signal-block">
                   <span class="signal-chip signal-{{ sig.severity }}">{{ sig.title }}</span>
                   {% if sig.detail %}<p class="signal-detail-text">{{ sig.detail }}</p>{% endif %}
-                  {% if sig.recommendation %}<p class="signal-rec-text">→ {{ sig.recommendation }}</p>{% endif %}
+                  {% if sig.recommendation %}<p class="signal-rec-text">→ {{ sig.recommendation }}{% if sig.doc_url %}<a href="{{ sig.doc_url }}" target="_blank" rel="noopener" class="doc-link">Learn more ↗</a>{% endif %}</p>{% endif %}
                 </div>
                 {% endfor %}
               </div>
@@ -860,7 +880,7 @@
                 <div class="signal-block">
                   <span class="signal-chip signal-{{ sig.severity }}">{{ sig.title }}</span>
                   {% if sig.detail %}<p class="signal-detail-text">{{ sig.detail }}</p>{% endif %}
-                  {% if sig.recommendation %}<p class="signal-rec-text">→ {{ sig.recommendation }}</p>{% endif %}
+                  {% if sig.recommendation %}<p class="signal-rec-text">→ {{ sig.recommendation }}{% if sig.doc_url %}<a href="{{ sig.doc_url }}" target="_blank" rel="noopener" class="doc-link">Learn more ↗</a>{% endif %}</p>{% endif %}
                 </div>
                 {% endfor %}
               </div>

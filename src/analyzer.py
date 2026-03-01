@@ -70,6 +70,7 @@ class Signal:
     detail: str
     score_contribution: int
     recommendation: str = ""
+    doc_url: str = ""
 
 
 @dataclass
@@ -223,6 +224,33 @@ def _recommendation_for_signal(key: str) -> str:
         "microsoft_first_party": "Microsoft first-party app — verify this service is still required and review any security signals flagged above.",
     }
     return recs.get(key, "Review and remediate flagged issues.")
+
+
+def _doc_url_for_signal(key: str) -> str:
+    urls = {
+        "never_signed_in":                "https://learn.microsoft.com/en-us/entra/identity/monitoring-health/recommendation-remove-unused-apps",
+        "stale":                          "https://learn.microsoft.com/en-us/entra/identity/monitoring-health/recommendation-remove-unused-apps",
+        "no_owners":                      "https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/overview-assign-app-owners",
+        "disabled_owner":                 "https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/overview-assign-app-owners",
+        "no_assignments":                 "https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/assign-user-or-group-access-portal",
+        "disabled_sp":                    "https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/disable-user-sign-in-portal",
+        "expired_secret":                 "https://learn.microsoft.com/en-us/entra/identity-platform/how-to-add-credentials",
+        "expired_cert":                   "https://learn.microsoft.com/en-us/entra/identity-platform/how-to-add-credentials",
+        "near_expiry_secret":             "https://learn.microsoft.com/en-us/entra/identity-platform/how-to-add-credentials",
+        "near_expiry_cert":               "https://learn.microsoft.com/en-us/entra/identity-platform/how-to-add-credentials",
+        "expiry_warning_secret":          "https://learn.microsoft.com/en-us/entra/identity-platform/how-to-add-credentials",
+        "expiry_warning_cert":            "https://learn.microsoft.com/en-us/entra/identity-platform/how-to-add-credentials",
+        "long_lived_secret":              "https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/tutorial-enforce-secret-standards",
+        "mixed_credential_types":         "https://learn.microsoft.com/en-us/entra/identity-platform/security-best-practices-for-app-registration",
+        "high_privilege_stale":           "https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/manage-application-permissions",
+        "excessive_delegated_permissions":"https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/manage-application-permissions",
+        "no_reply_urls":                  "https://learn.microsoft.com/en-us/entra/identity-platform/reply-url",
+        "wildcard_redirect_uri":          "https://learn.microsoft.com/en-us/entra/identity-platform/reply-url",
+        "implicit_grant_enabled":         "https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-implicit-grant-flow",
+        "multi_tenant_app":               "https://learn.microsoft.com/en-us/entra/identity-platform/single-and-multi-tenant-apps",
+        "microsoft_first_party":          "https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/manage-application-permissions",
+    }
+    return urls.get(key, "")
 
 
 # ── Core analysis ─────────────────────────────────────────────────────────────
@@ -650,9 +678,10 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
             score_contribution=0,
         ))
 
-    # Attach per-signal recommendations
+    # Attach per-signal recommendations and doc links
     for sig in signals:
         sig.recommendation = _recommendation_for_signal(sig.key)
+        sig.doc_url = _doc_url_for_signal(sig.key)
 
     # Cap score at 100
     score = min(score, 100)
