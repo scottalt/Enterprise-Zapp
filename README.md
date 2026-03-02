@@ -457,7 +457,9 @@ Contributions are welcome. Please open an issue before submitting a large pull r
 ## Author
 
 **Scott Altiparmak**
-[linkedin.com/in/scottaltiparmak](https://www.linkedin.com/in/scottaltiparmak/)
+[scottaltiparmak.com](https://scottaltiparmak.com) · [linkedin.com/in/scottaltiparmak](https://www.linkedin.com/in/scottaltiparmak/)
+
+Read the writeup: [Why Your Entra Tenant Has Orphaned Apps](https://scottaltiparmak.com/blog/why-your-entra-tenant-has-orphaned-apps)
 
 ---
 
