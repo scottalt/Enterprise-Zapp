@@ -118,8 +118,6 @@
    */
   .table-wrap {
     overflow-x: auto;
-    overflow-y: auto;
-    max-height: 70vh;
     border-radius: 12px;
     border: 1px solid var(--border);
   }
@@ -605,9 +603,9 @@
       <input type="text" id="inv-search" placeholder="Search by name or app ID..." oninput="filterTable()">
     </div>
     <div class="export-toolbar" id="export-toolbar">
-      <button class="export-btn" id="btn-export-csv" onclick="exportSelectedCSV()" disabled>Export Selected to CSV</button>
-      <button class="export-btn" id="btn-export-xlsx" onclick="exportSelectedXLSX()" disabled>Export Selected to XLSX</button>
-      <span class="select-count" id="select-count">0 selected</span>
+      <button class="export-btn" id="btn-export-csv" onclick="exportSelectedCSV()" disabled data-export-btn="tbl-inventory">Export Selected to CSV</button>
+      <button class="export-btn" id="btn-export-xlsx" onclick="exportSelectedXLSX()" disabled data-export-btn="tbl-inventory">Export Selected to XLSX</button>
+      <span class="select-count" id="select-count" data-select-count="tbl-inventory">0 selected</span>
     </div>
     <div class="table-wrap">
       <table id="tbl-inventory">
@@ -702,22 +700,29 @@
       Critical &amp; High Risk Apps
       <div class="section-subtitle">{{ critical_high_apps | length }} apps requiring immediate attention</div>
     </div>
+    <div class="export-toolbar">
+      <button class="export-btn" onclick="exportTableCSV('tbl-critical')" disabled data-export-btn="tbl-critical">Export Selected to CSV</button>
+      <button class="export-btn" onclick="exportTableXLSX('tbl-critical')" disabled data-export-btn="tbl-critical">Export Selected to XLSX</button>
+      <span class="select-count" data-select-count="tbl-critical">0 selected</span>
+    </div>
     <div class="table-wrap">
       <table id="tbl-critical">
         <thead>
           <tr>
-            <th onclick="sortTable('tbl-critical', 0)">App Name</th>
-            <th onclick="sortTable('tbl-critical', 1)">Risk Score</th>
-            <th onclick="sortTable('tbl-critical', 2)">Risk Band</th>
-            <th onclick="sortTable('tbl-critical', 3)">Last Sign-In</th>
-            <th onclick="sortTable('tbl-critical', 4)">Owners</th>
-            <th onclick="sortTable('tbl-critical', 5)">Assigned</th>
-            <th onclick="sortTable('tbl-critical', 6)">Primary Action</th>
+            <th class="cb-col"><input type="checkbox" class="row-select-cb" onclick="toggleTableSelectAll(this, 'tbl-critical')" title="Select all rows"></th>
+            <th onclick="sortTable('tbl-critical', 1)">App Name</th>
+            <th onclick="sortTable('tbl-critical', 2)">Risk Score</th>
+            <th onclick="sortTable('tbl-critical', 3)">Risk Band</th>
+            <th onclick="sortTable('tbl-critical', 4)">Last Sign-In</th>
+            <th onclick="sortTable('tbl-critical', 5)">Owners</th>
+            <th onclick="sortTable('tbl-critical', 6)">Assigned</th>
+            <th onclick="sortTable('tbl-critical', 7)">Primary Action</th>
           </tr>
         </thead>
         <tbody>
           {% for app in critical_high_apps %}
-          <tr class="expand-trigger" onclick="toggleRow('crit-{{ loop.index }}', this)">
+          <tr class="expand-trigger" onclick="toggleRow('crit-{{ loop.index }}', this)" data-appid="{{ app.app_id | lower }}" data-band="{{ app.risk_band }}" data-risk-score="{{ app.risk_score }}" data-last-signin="{{ app.last_sign_in | format_date if app.last_sign_in else '' }}" data-days-since="{{ app.days_since_sign_in if app.days_since_sign_in is not none else '' }}" data-owner-count="{{ app.owner_count }}" data-assignment-count="{{ app.assignment_count }}" data-account-enabled="{{ 'yes' if app.account_enabled else 'no' }}" data-signal-keys="{{ app.signals | map(attribute='key') | join('|') }}" data-signal-count="{{ app.signals | length }}" data-primary-rec="{{ app.primary_recommendation | e }}">
+            <td class="cb-col" onclick="event.stopPropagation()"><input type="checkbox" class="row-select-cb" onchange="updateTableSelectCount('tbl-critical')"></td>
             <td>{{ app_cell(app) }}</td>
             <td data-val="{{ app.risk_score }}">
               <div class="score-bar-wrap">
@@ -734,7 +739,7 @@
             <td style="font-size: 12px; color: var(--muted); max-width: 220px;">{{ app.primary_recommendation[:120] }}{% if app.primary_recommendation | length > 120 %}…{% endif %}</td>
           </tr>
           <tr class="expand-row" id="crit-{{ loop.index }}">
-            <td colspan="7">
+            <td colspan="8">
               <div class="expand-content">
                 {% for sig in app.signals %}
                 <div class="signal-block">
@@ -760,21 +765,28 @@
       Stale Apps
       <div class="section-subtitle">{{ stale_apps | length }} apps with no recent sign-in activity</div>
     </div>
+    <div class="export-toolbar">
+      <button class="export-btn" onclick="exportTableCSV('tbl-stale')" disabled data-export-btn="tbl-stale">Export Selected to CSV</button>
+      <button class="export-btn" onclick="exportTableXLSX('tbl-stale')" disabled data-export-btn="tbl-stale">Export Selected to XLSX</button>
+      <span class="select-count" data-select-count="tbl-stale">0 selected</span>
+    </div>
     <div class="table-wrap">
       <table id="tbl-stale">
         <thead>
           <tr>
-            <th onclick="sortTable('tbl-stale', 0)">App Name</th>
-            <th onclick="sortTable('tbl-stale', 1)">Last Sign-In</th>
-            <th onclick="sortTable('tbl-stale', 2)">Days Since Sign-In</th>
-            <th onclick="sortTable('tbl-stale', 3)">Owners</th>
-            <th onclick="sortTable('tbl-stale', 4)">Assignments</th>
-            <th onclick="sortTable('tbl-stale', 5)">Risk</th>
+            <th class="cb-col"><input type="checkbox" class="row-select-cb" onclick="toggleTableSelectAll(this, 'tbl-stale')" title="Select all rows"></th>
+            <th onclick="sortTable('tbl-stale', 1)">App Name</th>
+            <th onclick="sortTable('tbl-stale', 2)">Last Sign-In</th>
+            <th onclick="sortTable('tbl-stale', 3)">Days Since Sign-In</th>
+            <th onclick="sortTable('tbl-stale', 4)">Owners</th>
+            <th onclick="sortTable('tbl-stale', 5)">Assignments</th>
+            <th onclick="sortTable('tbl-stale', 6)">Risk</th>
           </tr>
         </thead>
         <tbody>
           {% for app in stale_apps %}
-          <tr class="expand-trigger" onclick="toggleRow('stale-{{ loop.index }}', this)">
+          <tr class="expand-trigger" onclick="toggleRow('stale-{{ loop.index }}', this)" data-appid="{{ app.app_id | lower }}" data-band="{{ app.risk_band }}" data-risk-score="{{ app.risk_score }}" data-last-signin="{{ app.last_sign_in | format_date if app.last_sign_in else '' }}" data-days-since="{{ app.days_since_sign_in if app.days_since_sign_in is not none else '' }}" data-owner-count="{{ app.owner_count }}" data-assignment-count="{{ app.assignment_count }}" data-account-enabled="{{ 'yes' if app.account_enabled else 'no' }}" data-signal-keys="{{ app.signals | map(attribute='key') | join('|') }}" data-signal-count="{{ app.signals | length }}" data-primary-rec="{{ app.primary_recommendation | e }}">
+            <td class="cb-col" onclick="event.stopPropagation()"><input type="checkbox" class="row-select-cb" onchange="updateTableSelectCount('tbl-stale')"></td>
             <td>{{ app_cell(app) }}</td>
             <td data-val="{{ app.days_since_sign_in if app.days_since_sign_in is not none else 99999 }}">{{ app.last_sign_in | format_date if app.last_sign_in else 'Never' }}</td>
             <td data-val="{{ app.days_since_sign_in if app.days_since_sign_in is not none else 99999 }}">{% if app.days_since_sign_in is not none %}{{ app.days_since_sign_in }}d{% else %}—{% endif %}</td>
@@ -783,7 +795,7 @@
             <td data-val="{{ app.risk_score }}"><span class="badge badge-{{ app.risk_band }}">{{ app.risk_band }}</span></td>
           </tr>
           <tr class="expand-row" id="stale-{{ loop.index }}">
-            <td colspan="6">
+            <td colspan="7">
               <div class="expand-content">
                 {% for sig in app.signals %}
                 <div class="signal-block">
@@ -809,23 +821,30 @@
       Credential Issues
       <div class="section-subtitle">{{ credential_apps | length }} apps with expired or near-expiry secrets/certificates</div>
     </div>
+    <div class="export-toolbar">
+      <button class="export-btn" onclick="exportTableCSV('tbl-creds')" disabled data-export-btn="tbl-creds">Export Selected to CSV</button>
+      <button class="export-btn" onclick="exportTableXLSX('tbl-creds')" disabled data-export-btn="tbl-creds">Export Selected to XLSX</button>
+      <span class="select-count" data-select-count="tbl-creds">0 selected</span>
+    </div>
     <div class="table-wrap">
       <table id="tbl-creds">
         <thead>
           <tr>
-            <th onclick="sortTable('tbl-creds', 0)">App Name</th>
-            <th onclick="sortTable('tbl-creds', 1)">Expired Secret</th>
-            <th onclick="sortTable('tbl-creds', 2)">Expired Cert</th>
-            <th onclick="sortTable('tbl-creds', 3)">Near-Expiry Secret</th>
-            <th onclick="sortTable('tbl-creds', 4)">Near-Expiry Cert</th>
-            <th onclick="sortTable('tbl-creds', 5)">Earliest Secret Expiry</th>
-            <th onclick="sortTable('tbl-creds', 6)">Earliest Cert Expiry</th>
-            <th onclick="sortTable('tbl-creds', 7)">Risk</th>
+            <th class="cb-col"><input type="checkbox" class="row-select-cb" onclick="toggleTableSelectAll(this, 'tbl-creds')" title="Select all rows"></th>
+            <th onclick="sortTable('tbl-creds', 1)">App Name</th>
+            <th onclick="sortTable('tbl-creds', 2)">Expired Secret</th>
+            <th onclick="sortTable('tbl-creds', 3)">Expired Cert</th>
+            <th onclick="sortTable('tbl-creds', 4)">Near-Expiry Secret</th>
+            <th onclick="sortTable('tbl-creds', 5)">Near-Expiry Cert</th>
+            <th onclick="sortTable('tbl-creds', 6)">Earliest Secret Expiry</th>
+            <th onclick="sortTable('tbl-creds', 7)">Earliest Cert Expiry</th>
+            <th onclick="sortTable('tbl-creds', 8)">Risk</th>
           </tr>
         </thead>
         <tbody>
           {% for app in credential_apps %}
-          <tr class="expand-trigger" onclick="toggleRow('cred-{{ loop.index }}', this)">
+          <tr class="expand-trigger" onclick="toggleRow('cred-{{ loop.index }}', this)" data-appid="{{ app.app_id | lower }}" data-band="{{ app.risk_band }}" data-risk-score="{{ app.risk_score }}" data-last-signin="{{ app.last_sign_in | format_date if app.last_sign_in else '' }}" data-days-since="{{ app.days_since_sign_in if app.days_since_sign_in is not none else '' }}" data-owner-count="{{ app.owner_count }}" data-assignment-count="{{ app.assignment_count }}" data-account-enabled="{{ 'yes' if app.account_enabled else 'no' }}" data-has-expired-secret="{{ 'yes' if app.has_expired_secret else 'no' }}" data-has-expired-cert="{{ 'yes' if app.has_expired_cert else 'no' }}" data-has-near-expiry-secret="{{ 'yes' if app.has_near_expiry_secret else 'no' }}" data-has-near-expiry-cert="{{ 'yes' if app.has_near_expiry_cert else 'no' }}" data-signal-keys="{{ app.signals | map(attribute='key') | join('|') }}" data-signal-count="{{ app.signals | length }}" data-primary-rec="{{ app.primary_recommendation | e }}">
+            <td class="cb-col" onclick="event.stopPropagation()"><input type="checkbox" class="row-select-cb" onchange="updateTableSelectCount('tbl-creds')"></td>
             <td>{{ app_cell(app) }}</td>
             <td data-val="{{ 1 if app.has_expired_secret else 0 }}">{% if app.has_expired_secret %}<span class="badge badge-critical">Yes</span>{% else %}—{% endif %}</td>
             <td data-val="{{ 1 if app.has_expired_cert else 0 }}">{% if app.has_expired_cert %}<span class="badge badge-critical">Yes</span>{% else %}—{% endif %}</td>
@@ -844,7 +863,7 @@
             <td data-val="{{ app.risk_score }}"><span class="badge badge-{{ app.risk_band }}">{{ app.risk_band }}</span></td>
           </tr>
           <tr class="expand-row" id="cred-{{ loop.index }}">
-            <td colspan="8">
+            <td colspan="9">
               <div class="expand-content">
                 {% for sig in app.signals %}
                 <div class="signal-block">
@@ -870,20 +889,27 @@
       Orphaned Apps
       <div class="section-subtitle">{{ orphaned_apps | length }} apps with no valid owner</div>
     </div>
+    <div class="export-toolbar">
+      <button class="export-btn" onclick="exportTableCSV('tbl-orphaned')" disabled data-export-btn="tbl-orphaned">Export Selected to CSV</button>
+      <button class="export-btn" onclick="exportTableXLSX('tbl-orphaned')" disabled data-export-btn="tbl-orphaned">Export Selected to XLSX</button>
+      <span class="select-count" data-select-count="tbl-orphaned">0 selected</span>
+    </div>
     <div class="table-wrap">
       <table id="tbl-orphaned">
         <thead>
           <tr>
-            <th onclick="sortTable('tbl-orphaned', 0)">App Name</th>
-            <th onclick="sortTable('tbl-orphaned', 1)">Owners (total)</th>
-            <th onclick="sortTable('tbl-orphaned', 2)">Disabled Owners</th>
-            <th onclick="sortTable('tbl-orphaned', 3)">Last Sign-In</th>
-            <th onclick="sortTable('tbl-orphaned', 4)">Risk</th>
+            <th class="cb-col"><input type="checkbox" class="row-select-cb" onclick="toggleTableSelectAll(this, 'tbl-orphaned')" title="Select all rows"></th>
+            <th onclick="sortTable('tbl-orphaned', 1)">App Name</th>
+            <th onclick="sortTable('tbl-orphaned', 2)">Owners (total)</th>
+            <th onclick="sortTable('tbl-orphaned', 3)">Disabled Owners</th>
+            <th onclick="sortTable('tbl-orphaned', 4)">Last Sign-In</th>
+            <th onclick="sortTable('tbl-orphaned', 5)">Risk</th>
           </tr>
         </thead>
         <tbody>
           {% for app in orphaned_apps %}
-          <tr class="expand-trigger" onclick="toggleRow('orphan-{{ loop.index }}', this)">
+          <tr class="expand-trigger" onclick="toggleRow('orphan-{{ loop.index }}', this)" data-appid="{{ app.app_id | lower }}" data-band="{{ app.risk_band }}" data-risk-score="{{ app.risk_score }}" data-last-signin="{{ app.last_sign_in | format_date if app.last_sign_in else '' }}" data-days-since="{{ app.days_since_sign_in if app.days_since_sign_in is not none else '' }}" data-owner-count="{{ app.owner_count }}" data-assignment-count="{{ app.assignment_count }}" data-account-enabled="{{ 'yes' if app.account_enabled else 'no' }}" data-signal-keys="{{ app.signals | map(attribute='key') | join('|') }}" data-signal-count="{{ app.signals | length }}" data-primary-rec="{{ app.primary_recommendation | e }}">
+            <td class="cb-col" onclick="event.stopPropagation()"><input type="checkbox" class="row-select-cb" onchange="updateTableSelectCount('tbl-orphaned')"></td>
             <td>{{ app_cell(app) }}</td>
             <td data-val="{{ app.owner_count }}">{{ app.owner_count }}</td>
             <td data-val="{{ app.disabled_owner_count }}">{{ app.disabled_owner_count }}</td>
@@ -891,7 +917,7 @@
             <td data-val="{{ app.risk_score }}"><span class="badge badge-{{ app.risk_band }}">{{ app.risk_band }}</span></td>
           </tr>
           <tr class="expand-row" id="orphan-{{ loop.index }}">
-            <td colspan="5">
+            <td colspan="6">
               <div class="expand-content">
                 {% for sig in app.signals %}
                 <div class="signal-block">
@@ -917,26 +943,33 @@
       Over-Privileged Apps
       <div class="section-subtitle">{{ high_privilege_apps | length }} apps with high-privilege permissions and limited or no activity</div>
     </div>
+    <div class="export-toolbar">
+      <button class="export-btn" onclick="exportTableCSV('tbl-priv')" disabled data-export-btn="tbl-priv">Export Selected to CSV</button>
+      <button class="export-btn" onclick="exportTableXLSX('tbl-priv')" disabled data-export-btn="tbl-priv">Export Selected to XLSX</button>
+      <span class="select-count" data-select-count="tbl-priv">0 selected</span>
+    </div>
     <div class="table-wrap">
       <table id="tbl-priv">
         <thead>
           <tr>
-            <th onclick="sortTable('tbl-priv', 0)">App Name</th>
-            <th onclick="sortTable('tbl-priv', 1)">Last Sign-In</th>
-            <th onclick="sortTable('tbl-priv', 2)">High-Privilege Permissions</th>
-            <th onclick="sortTable('tbl-priv', 3)">Risk</th>
+            <th class="cb-col"><input type="checkbox" class="row-select-cb" onclick="toggleTableSelectAll(this, 'tbl-priv')" title="Select all rows"></th>
+            <th onclick="sortTable('tbl-priv', 1)">App Name</th>
+            <th onclick="sortTable('tbl-priv', 2)">Last Sign-In</th>
+            <th onclick="sortTable('tbl-priv', 3)">High-Privilege Permissions</th>
+            <th onclick="sortTable('tbl-priv', 4)">Risk</th>
           </tr>
         </thead>
         <tbody>
           {% for app in high_privilege_apps %}
-          <tr class="expand-trigger" onclick="toggleRow('priv-{{ loop.index }}', this)">
+          <tr class="expand-trigger" onclick="toggleRow('priv-{{ loop.index }}', this)" data-appid="{{ app.app_id | lower }}" data-band="{{ app.risk_band }}" data-risk-score="{{ app.risk_score }}" data-last-signin="{{ app.last_sign_in | format_date if app.last_sign_in else '' }}" data-days-since="{{ app.days_since_sign_in if app.days_since_sign_in is not none else '' }}" data-owner-count="{{ app.owner_count }}" data-assignment-count="{{ app.assignment_count }}" data-account-enabled="{{ 'yes' if app.account_enabled else 'no' }}" data-has-high-privilege="yes" data-signal-keys="{{ app.signals | map(attribute='key') | join('|') }}" data-signal-count="{{ app.signals | length }}" data-primary-rec="{{ app.primary_recommendation | e }}">
+            <td class="cb-col" onclick="event.stopPropagation()"><input type="checkbox" class="row-select-cb" onchange="updateTableSelectCount('tbl-priv')"></td>
             <td>{{ app_cell(app) }}</td>
             <td data-val="{{ app.days_since_sign_in if app.days_since_sign_in is not none else 99999 }}">{{ app.last_sign_in | format_date if app.last_sign_in else '—' }}</td>
             <td><span class="badge badge-critical">Yes</span></td>
             <td data-val="{{ app.risk_score }}"><span class="badge badge-{{ app.risk_band }}">{{ app.risk_band }}</span></td>
           </tr>
           <tr class="expand-row" id="priv-{{ loop.index }}">
-            <td colspan="4">
+            <td colspan="5">
               <div class="expand-content">
                 {% for sig in app.signals %}
                 <div class="signal-block">
@@ -1321,69 +1354,69 @@ function filterTable() {
 // Init counter
 filterTable();
 
-// ── Row selection & export ───────────────────────────────────────────────────
-function updateSelectCount() {
-  var checked = document.querySelectorAll('#tbl-inventory tbody tr:not(.expand-row) .row-select-cb:checked').length;
-  document.getElementById('select-count').textContent = checked + ' selected';
-  document.getElementById('btn-export-csv').disabled = checked === 0;
-  document.getElementById('btn-export-xlsx').disabled = checked === 0;
+// ── Row selection & export (generic for all tables) ─────────────────────────
+var _exportHeaders = [
+  'app_name', 'app_id', 'risk_score', 'risk_band', 'last_sign_in',
+  'days_since_sign_in', 'owner_count', 'assignment_count', 'account_enabled',
+  'signal_keys', 'signal_count', 'primary_recommendation'
+];
 
-  // Sync the select-all checkbox
-  var visibleCbs = getVisibleCheckboxes();
-  var allCb = document.getElementById('select-all-cb');
-  var visibleChecked = visibleCbs.filter(function(cb) { return cb.checked; }).length;
-  allCb.checked = visibleCbs.length > 0 && visibleChecked === visibleCbs.length;
-  allCb.indeterminate = visibleChecked > 0 && visibleChecked < visibleCbs.length;
-}
-
-function getVisibleCheckboxes() {
+function getTableCheckboxes(tableId, visibleOnly) {
   var cbs = [];
-  document.querySelectorAll('#tbl-inventory tbody tr:not(.expand-row)').forEach(function(row) {
-    if (row.style.display !== 'none') {
-      var cb = row.querySelector('.row-select-cb');
-      if (cb) cbs.push(cb);
-    }
+  document.querySelectorAll('#' + tableId + ' tbody tr:not(.expand-row)').forEach(function(row) {
+    if (visibleOnly && row.style.display === 'none') return;
+    var cb = row.querySelector('.row-select-cb');
+    if (cb) cbs.push(cb);
   });
   return cbs;
 }
 
-function toggleSelectAll(masterCb) {
-  var cbs = getVisibleCheckboxes();
+function updateTableSelectCount(tableId) {
+  var allCbs = getTableCheckboxes(tableId, false);
+  var checked = allCbs.filter(function(cb) { return cb.checked; }).length;
+
+  // Update count label
+  var counter = document.querySelector('[data-select-count="' + tableId + '"]');
+  if (counter) counter.textContent = checked + ' selected';
+
+  // Enable/disable export buttons
+  document.querySelectorAll('[data-export-btn="' + tableId + '"]').forEach(function(btn) {
+    btn.disabled = checked === 0;
+  });
+
+  // Sync the select-all checkbox in the thead
+  var visibleCbs = getTableCheckboxes(tableId, true);
+  var masterCb = document.querySelector('#' + tableId + ' thead .row-select-cb');
+  if (masterCb) {
+    var visChecked = visibleCbs.filter(function(cb) { return cb.checked; }).length;
+    masterCb.checked = visibleCbs.length > 0 && visChecked === visibleCbs.length;
+    masterCb.indeterminate = visChecked > 0 && visChecked < visibleCbs.length;
+  }
+}
+
+// Inventory-specific wrappers (called by existing onchange/onclick in inventory table)
+function updateSelectCount() { updateTableSelectCount('tbl-inventory'); }
+function toggleSelectAll(masterCb) { toggleTableSelectAll(masterCb, 'tbl-inventory'); }
+function exportSelectedCSV() { exportTableCSV('tbl-inventory'); }
+function exportSelectedXLSX() { exportTableXLSX('tbl-inventory'); }
+
+function toggleTableSelectAll(masterCb, tableId) {
+  var cbs = getTableCheckboxes(tableId, true);
   cbs.forEach(function(cb) { cb.checked = masterCb.checked; });
-  updateSelectCount();
+  updateTableSelectCount(tableId);
 }
 
-function csvSafe(val) {
-  if (!val) return val;
-  var s = String(val);
-  if (s[0] === '=' || s[0] === '+' || s[0] === '-' || s[0] === '@' || s[0] === '\t' || s[0] === '\r') {
-    s = "'" + s;
-  }
-  // Escape quotes and wrap if contains comma/quote/newline
-  if (s.indexOf('"') !== -1 || s.indexOf(',') !== -1 || s.indexOf('\n') !== -1) {
-    s = '"' + s.replace(/"/g, '""') + '"';
-  }
-  return s;
-}
-
-function getSelectedRows() {
+function getSelectedTableRows(tableId) {
   var rows = [];
-  document.querySelectorAll('#tbl-inventory tbody tr:not(.expand-row)').forEach(function(row) {
+  document.querySelectorAll('#' + tableId + ' tbody tr:not(.expand-row)').forEach(function(row) {
     var cb = row.querySelector('.row-select-cb');
     if (cb && cb.checked) rows.push(row);
   });
   return rows;
 }
 
-function buildExportData() {
-  var headers = [
-    'app_name', 'app_id', 'risk_score', 'risk_band', 'last_sign_in',
-    'days_since_sign_in', 'owner_count', 'assignment_count', 'account_enabled',
-    'sp_type', 'created_at', 'has_expired_secret', 'has_expired_cert',
-    'has_near_expiry_secret', 'has_near_expiry_cert', 'has_high_privilege',
-    'is_microsoft_first_party', 'signal_keys', 'signal_count', 'primary_recommendation'
-  ];
-  var rows = getSelectedRows();
+function buildTableExportData(tableId) {
+  var rows = getSelectedTableRows(tableId);
   var data = rows.map(function(row) {
     return {
       app_name:                row.querySelector('.app-name') ? row.querySelector('.app-name').textContent.replace(/↗/g,'').trim() : '',
@@ -1395,24 +1428,28 @@ function buildExportData() {
       owner_count:             row.dataset.ownerCount || '',
       assignment_count:        row.dataset.assignmentCount || '',
       account_enabled:         row.dataset.accountEnabled || '',
-      sp_type:                 row.dataset.spType || '',
-      created_at:              row.dataset.createdAt || '',
-      has_expired_secret:      row.dataset.hasExpiredSecret || '',
-      has_expired_cert:        row.dataset.hasExpiredCert || '',
-      has_near_expiry_secret:  row.dataset.hasNearExpirySecret || '',
-      has_near_expiry_cert:    row.dataset.hasNearExpiryCert || '',
-      has_high_privilege:      row.dataset.hasHighPrivilege || '',
-      is_microsoft_first_party:row.dataset.isMicrosoft || '',
       signal_keys:             row.dataset.signalKeys || '',
       signal_count:            row.dataset.signalCount || '',
       primary_recommendation:  row.dataset.primaryRec || ''
     };
   });
-  return { headers: headers, data: data };
+  return { headers: _exportHeaders, data: data };
 }
 
-function exportSelectedCSV() {
-  var exp = buildExportData();
+function csvSafe(val) {
+  if (!val) return val;
+  var s = String(val);
+  if (s[0] === '=' || s[0] === '+' || s[0] === '-' || s[0] === '@' || s[0] === '\t' || s[0] === '\r') {
+    s = "'" + s;
+  }
+  if (s.indexOf('"') !== -1 || s.indexOf(',') !== -1 || s.indexOf('\n') !== -1) {
+    s = '"' + s.replace(/"/g, '""') + '"';
+  }
+  return s;
+}
+
+function exportTableCSV(tableId) {
+  var exp = buildTableExportData(tableId);
   if (exp.data.length === 0) return;
   var csvLines = [exp.headers.join(',')];
   exp.data.forEach(function(row) {
@@ -1422,22 +1459,19 @@ function exportSelectedCSV() {
   downloadBlob(blob, 'enterprise_zapp_selected.csv');
 }
 
-function exportSelectedXLSX() {
-  var exp = buildExportData();
+function exportTableXLSX(tableId) {
+  var exp = buildTableExportData(tableId);
   if (exp.data.length === 0) return;
-  // Build a minimal XLSX file using XML spreadsheet format that Excel/Sheets can open
   var xml = '<?xml version="1.0"?>\n';
   xml += '<?mso-application progid="Excel.Sheet"?>\n';
   xml += '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"\n';
   xml += ' xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">\n';
   xml += '<Worksheet ss:Name="Selected Apps"><Table>\n';
-  // Header row
   xml += '<Row>';
   exp.headers.forEach(function(h) {
     xml += '<Cell><Data ss:Type="String">' + escapeXml(h) + '</Data></Cell>';
   });
   xml += '</Row>\n';
-  // Data rows
   exp.data.forEach(function(row) {
     xml += '<Row>';
     exp.headers.forEach(function(h) {
