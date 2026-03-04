@@ -13,7 +13,7 @@
     --surface2: #222534;
     --border:   #2e3347;
     --text:     #e2e8f0;
-    --muted:    #8892a4;
+    --muted:    #9ba3b5;
     --accent:   #38bdf8;
     --critical: #ef4444;
     --high:     #f97316;
@@ -396,11 +396,10 @@
 
   /* ── Signal detail text (print-visible) ─────────────────────────────── */
   .signal-detail-text {
-    font-size: 11px;
+    font-size: 12px;
     color: var(--muted);
     margin-top: 6px;
     line-height: 1.5;
-    font-style: italic;
   }
   .signal-block {
     margin-bottom: 12px;
@@ -502,7 +501,7 @@
   #tbl-creds tbody tr.expand-trigger:nth-of-type(4n+1),
   #tbl-orphaned tbody tr.expand-trigger:nth-of-type(4n+1),
   #tbl-priv tbody tr.expand-trigger:nth-of-type(4n+1) {
-    background: rgba(255,255,255,0.02);
+    background: rgba(255,255,255,0.04);
   }
 
   /* ── Expand-all / collapse-all toggle button ───────────────────────── */
@@ -514,6 +513,101 @@
   }
   .expand-all-btn:hover { color: var(--text); border-color: var(--muted); }
 
+  /* ── Sub-section search bar ──────────────────────────────────────────── */
+  .sub-filter-bar { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
+  .sub-filter-bar input {
+    background: var(--surface); border: 1px solid var(--border); color: var(--text);
+    border-radius: 8px; padding: 7px 12px; font-size: 13px; width: 240px; outline: none;
+  }
+  .sub-filter-bar input:focus { border-color: var(--accent); }
+  .sub-filter-bar .sub-count { font-size: 12px; color: var(--muted); }
+
+  /* ── Signal preview chips (inline in collapsed rows) ───────────────── */
+  .signal-previews { display: inline-flex; gap: 4px; flex-wrap: wrap; vertical-align: middle; }
+  .signal-preview-chip {
+    display: inline-block; border-radius: 4px; padding: 1px 6px;
+    font-size: 10px; font-weight: 600; white-space: nowrap;
+  }
+  .signal-preview-chip.spc-critical { background: rgba(239,68,68,0.15); color: #fca5a5; }
+  .signal-preview-chip.spc-high     { background: rgba(249,115,22,0.15); color: #fdba74; }
+  .signal-preview-chip.spc-medium   { background: rgba(234,179,8,0.15);  color: #fde047; }
+  .signal-preview-chip.spc-low      { background: rgba(34,197,94,0.15);  color: #86efac; }
+  .signal-more { font-size: 10px; color: var(--muted); font-weight: 600; padding: 1px 4px; }
+
+  /* ── Copy app ID button ────────────────────────────────────────────── */
+  .copy-id-btn {
+    display: inline-block; border: none; background: none; color: var(--muted);
+    font-size: 11px; cursor: pointer; padding: 0 4px; vertical-align: middle;
+    opacity: 0.5; transition: opacity 0.15s, color 0.15s;
+  }
+  .copy-id-btn:hover { opacity: 1; color: var(--accent); }
+  .copy-id-btn.copied { color: var(--clean); opacity: 1; }
+
+  /* ── Review status badge ───────────────────────────────────────────── */
+  .review-status {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 18px; height: 18px; border-radius: 9px;
+    font-size: 9px; font-weight: 700; cursor: pointer;
+    border: 1.5px solid var(--border); background: transparent;
+    color: var(--muted); transition: all 0.15s; vertical-align: middle;
+    margin-right: 6px; user-select: none; padding: 0;
+  }
+  .review-status:hover { border-color: var(--accent); color: var(--accent); }
+  .review-status[data-status="reviewed"] { border-color: var(--clean); background: rgba(16,185,129,0.15); color: var(--clean); }
+  .review-status[data-status="flagged"] { border-color: var(--high); background: rgba(249,115,22,0.15); color: var(--high); }
+  .review-status[data-status="remediated"] { border-color: var(--accent); background: rgba(56,189,248,0.15); color: var(--accent); }
+
+  /* ── Review progress bar ───────────────────────────────────────────── */
+  .progress-bar-wrap {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 12px; font-size: 12px; color: var(--muted);
+  }
+  .progress-track {
+    flex: 1; max-width: 200px; height: 6px; border-radius: 3px; background: var(--border); overflow: hidden;
+  }
+  .progress-fill { height: 100%; border-radius: 3px; background: var(--clean); transition: width 0.3s; }
+
+  /* ── Export All button ─────────────────────────────────────────────── */
+  .export-all-btn {
+    border: 1px solid var(--border); background: var(--surface); color: var(--muted);
+    border-radius: 8px; padding: 6px 14px; font-size: 12px; font-weight: 600;
+    cursor: pointer; transition: background 0.15s, color 0.15s;
+  }
+  .export-all-btn:hover { color: var(--text); border-color: var(--muted); }
+
+  /* ── Back-to-top button ────────────────────────────────────────────── */
+  .back-to-top {
+    position: fixed; bottom: 28px; right: 28px; z-index: 200;
+    width: 40px; height: 40px; border-radius: 50%;
+    background: var(--surface); border: 1px solid var(--border);
+    color: var(--muted); font-size: 18px; cursor: pointer;
+    display: none; align-items: center; justify-content: center;
+    transition: background 0.15s, color 0.15s, opacity 0.2s;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  }
+  .back-to-top:hover { background: var(--surface2); color: var(--accent); border-color: var(--accent); }
+  .back-to-top.visible { display: flex; }
+
+  /* ── Keyboard shortcut modal ───────────────────────────────────────── */
+  .kbd-modal-overlay {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 300;
+    background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); display: none;
+    align-items: center; justify-content: center;
+  }
+  .kbd-modal-overlay.open { display: flex; }
+  .kbd-modal {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 24px 28px; max-width: 420px; width: 90%;
+  }
+  .kbd-modal h3 { font-size: 16px; font-weight: 700; margin-bottom: 16px; color: var(--text); }
+  .kbd-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+  .kbd-row:last-child { border-bottom: none; }
+  .kbd-key {
+    display: inline-block; background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 4px; padding: 2px 8px; font-size: 12px; font-weight: 600;
+    font-family: monospace; color: var(--accent); min-width: 28px; text-align: center;
+  }
+  .kbd-desc { font-size: 13px; color: var(--muted); }
+
   /* ── Print styles ────────────────────────────────────────────────────── */
   @media print {
     .sticky-nav { display: none; }
@@ -524,15 +618,29 @@
     .filter-bar { display: none; }
     .export-toolbar { display: none; }
     .cb-col { display: none; }
+    .sub-filter-bar { display: none; }
+    .back-to-top { display: none !important; }
+    .kbd-modal-overlay { display: none !important; }
+    .review-status { display: none; }
+    .copy-id-btn { display: none; }
+    .progress-bar-wrap { display: none; }
   }
 </style>
 </head>
 <body>
 
 {# ── Reusable macro: app name / app ID / description cell ──────────────────── #}
+{# ── Reusable macro: signal preview chips (top 3 inline) ────────────────────── #}
+{% macro signal_previews(app) %}
+<div class="signal-previews">
+  {% for sig in app.signals[:3] %}<span class="signal-preview-chip spc-{{ sig.severity }}">{{ sig.title }}</span>{% endfor %}{% if app.signals | length > 3 %}<span class="signal-more">+{{ app.signals | length - 3 }}</span>{% endif %}
+</div>
+{% endmacro %}
+
+{# ── Reusable macro: app name / app ID / description cell ──────────────────── #}
 {% macro app_cell(app) %}
-<div class="app-name">{{ app.display_name }}<a href="https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationMenuBlade/~/Overview/appId/{{ app.app_id }}" target="_blank" rel="noopener" title="Open in Entra admin center" class="entra-link">↗</a></div>
-<div class="app-id">{{ app.app_id }}</div>
+<div class="app-name"><button class="review-status" data-appid="{{ app.app_id | lower }}" data-status="unreviewed" onclick="event.stopPropagation(); cycleReviewStatus(this)" title="Click to mark review status">&#9675;</button>{{ app.display_name }}<a href="https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationMenuBlade/~/Overview/appId/{{ app.app_id }}" target="_blank" rel="noopener" title="Open in Entra admin center" class="entra-link">↗</a></div>
+<div class="app-id">{{ app.app_id }}<button class="copy-id-btn" onclick="event.stopPropagation(); copyAppId(this, '{{ app.app_id }}')" title="Copy app ID">&#9112;</button></div>
 {% set _desc = (app.description or app.notes or '') | trim %}
 {% if _desc %}
 <div class="app-desc" title="{{ _desc }}">{{ _desc[:100] }}{{ '…' if _desc | length > 100 else '' }}</div>
@@ -573,6 +681,7 @@
     {% if high_privilege_apps %}<li><a href="#sec-priv">Over-Privileged</a></li>{% endif %}
     <li><a href="#sec-ca">CA Coverage</a></li>
     <li><a href="#sec-methodology">Methodology</a></li>
+    <li style="margin-left: auto;"><a href="#" onclick="event.preventDefault(); document.getElementById('kbd-modal').classList.add('open')" title="Keyboard shortcuts" style="opacity: 0.5; font-size: 11px;">? Shortcuts</a></li>
   </ul>
 </nav>
 
@@ -811,9 +920,18 @@
       <span class="section-banner-icon">&#9888;</span>
       These apps have the highest risk scores and should be reviewed first. Expand each row to see individual signals and recommended actions.
     </div>
+    <div class="progress-bar-wrap" data-progress="tbl-critical">
+      <div class="progress-track"><div class="progress-fill" style="width: 0%"></div></div>
+      <span class="progress-text">0 of {{ critical_high_apps | length }} reviewed</span>
+    </div>
+    <div class="sub-filter-bar">
+      <input type="text" placeholder="Search apps..." oninput="filterSubTable('tbl-critical', this.value)">
+      <span class="sub-count" data-sub-count="tbl-critical"></span>
+    </div>
     <div class="export-toolbar">
       <button class="export-btn" onclick="exportTableCSV('tbl-critical')" disabled data-export-btn="tbl-critical">Export Selected to CSV</button>
       <button class="export-btn" onclick="exportTableXLSX('tbl-critical')" disabled data-export-btn="tbl-critical">Export Selected to XLSX</button>
+      <button class="export-all-btn" onclick="exportAllTableCSV('tbl-critical')">Export All to CSV</button>
       <span class="select-count" data-select-count="tbl-critical">0 selected</span>
       <button class="expand-all-btn" onclick="toggleExpandAll('tbl-critical', this)">Expand All</button>
     </div>
@@ -833,9 +951,9 @@
         </thead>
         <tbody>
           {% for app in critical_high_apps %}
-          <tr class="expand-trigger" onclick="toggleRow('crit-{{ loop.index }}', this)" data-appid="{{ app.app_id | lower }}" data-band="{{ app.risk_band }}" data-risk-score="{{ app.risk_score }}" data-last-signin="{{ app.last_sign_in | format_date if app.last_sign_in else '' }}" data-days-since="{{ app.days_since_sign_in if app.days_since_sign_in is not none else '' }}" data-owner-count="{{ app.owner_count }}" data-assignment-count="{{ app.assignment_count }}" data-account-enabled="{{ 'yes' if app.account_enabled else 'no' }}" data-signal-keys="{{ app.signals | map(attribute='key') | join('|') }}" data-signal-count="{{ app.signals | length }}" data-primary-rec="{{ app.primary_recommendation | e }}">
+          <tr class="expand-trigger" onclick="toggleRow('crit-{{ loop.index }}', this)" data-appid="{{ app.app_id | lower }}" data-name="{{ app.display_name | lower }}" data-band="{{ app.risk_band }}" data-risk-score="{{ app.risk_score }}" data-last-signin="{{ app.last_sign_in | format_date if app.last_sign_in else '' }}" data-days-since="{{ app.days_since_sign_in if app.days_since_sign_in is not none else '' }}" data-owner-count="{{ app.owner_count }}" data-assignment-count="{{ app.assignment_count }}" data-account-enabled="{{ 'yes' if app.account_enabled else 'no' }}" data-signal-keys="{{ app.signals | map(attribute='key') | join('|') }}" data-signal-count="{{ app.signals | length }}" data-primary-rec="{{ app.primary_recommendation | e }}">
             <td class="cb-col" onclick="event.stopPropagation()"><input type="checkbox" class="row-select-cb" onchange="updateTableSelectCount('tbl-critical')"></td>
-            <td>{{ app_cell(app) }}</td>
+            <td>{{ app_cell(app) }}{{ signal_previews(app) }}</td>
             <td data-val="{{ app.risk_score }}">
               <div class="score-bar-wrap">
                 <div class="score-bar">
@@ -895,9 +1013,18 @@
       <span class="section-banner-icon">&#128337;</span>
       These apps haven't been used recently. Consider disabling or removing them to reduce your attack surface.
     </div>
+    <div class="progress-bar-wrap" data-progress="tbl-stale">
+      <div class="progress-track"><div class="progress-fill" style="width: 0%"></div></div>
+      <span class="progress-text">0 of {{ stale_apps | length }} reviewed</span>
+    </div>
+    <div class="sub-filter-bar">
+      <input type="text" placeholder="Search apps..." oninput="filterSubTable('tbl-stale', this.value)">
+      <span class="sub-count" data-sub-count="tbl-stale"></span>
+    </div>
     <div class="export-toolbar">
       <button class="export-btn" onclick="exportTableCSV('tbl-stale')" disabled data-export-btn="tbl-stale">Export Selected to CSV</button>
       <button class="export-btn" onclick="exportTableXLSX('tbl-stale')" disabled data-export-btn="tbl-stale">Export Selected to XLSX</button>
+      <button class="export-all-btn" onclick="exportAllTableCSV('tbl-stale')">Export All to CSV</button>
       <span class="select-count" data-select-count="tbl-stale">0 selected</span>
       <button class="expand-all-btn" onclick="toggleExpandAll('tbl-stale', this)">Expand All</button>
     </div>
@@ -916,9 +1043,9 @@
         </thead>
         <tbody>
           {% for app in stale_apps %}
-          <tr class="expand-trigger" onclick="toggleRow('stale-{{ loop.index }}', this)" data-appid="{{ app.app_id | lower }}" data-band="{{ app.risk_band }}" data-risk-score="{{ app.risk_score }}" data-last-signin="{{ app.last_sign_in | format_date if app.last_sign_in else '' }}" data-days-since="{{ app.days_since_sign_in if app.days_since_sign_in is not none else '' }}" data-owner-count="{{ app.owner_count }}" data-assignment-count="{{ app.assignment_count }}" data-account-enabled="{{ 'yes' if app.account_enabled else 'no' }}" data-signal-keys="{{ app.signals | map(attribute='key') | join('|') }}" data-signal-count="{{ app.signals | length }}" data-primary-rec="{{ app.primary_recommendation | e }}">
+          <tr class="expand-trigger" onclick="toggleRow('stale-{{ loop.index }}', this)" data-appid="{{ app.app_id | lower }}" data-name="{{ app.display_name | lower }}" data-band="{{ app.risk_band }}" data-risk-score="{{ app.risk_score }}" data-last-signin="{{ app.last_sign_in | format_date if app.last_sign_in else '' }}" data-days-since="{{ app.days_since_sign_in if app.days_since_sign_in is not none else '' }}" data-owner-count="{{ app.owner_count }}" data-assignment-count="{{ app.assignment_count }}" data-account-enabled="{{ 'yes' if app.account_enabled else 'no' }}" data-signal-keys="{{ app.signals | map(attribute='key') | join('|') }}" data-signal-count="{{ app.signals | length }}" data-primary-rec="{{ app.primary_recommendation | e }}">
             <td class="cb-col" onclick="event.stopPropagation()"><input type="checkbox" class="row-select-cb" onchange="updateTableSelectCount('tbl-stale')"></td>
-            <td>{{ app_cell(app) }}</td>
+            <td>{{ app_cell(app) }}{{ signal_previews(app) }}</td>
             <td data-val="{{ app.days_since_sign_in if app.days_since_sign_in is not none else 99999 }}">{{ app.last_sign_in | format_date if app.last_sign_in else 'Never' }}</td>
             <td data-val="{{ app.days_since_sign_in if app.days_since_sign_in is not none else 99999 }}">{% if app.days_since_sign_in is not none %}{{ app.days_since_sign_in }}d{% else %}—{% endif %}</td>
             <td data-val="{{ app.owner_count }}">{{ app.owner_count }}</td>
@@ -970,9 +1097,18 @@
       <span class="section-banner-icon">&#128273;</span>
       Expired credentials may indicate abandoned apps. Near-expiry credentials need rotation to prevent service disruption.
     </div>
+    <div class="progress-bar-wrap" data-progress="tbl-creds">
+      <div class="progress-track"><div class="progress-fill" style="width: 0%"></div></div>
+      <span class="progress-text">0 of {{ credential_apps | length }} reviewed</span>
+    </div>
+    <div class="sub-filter-bar">
+      <input type="text" placeholder="Search apps..." oninput="filterSubTable('tbl-creds', this.value)">
+      <span class="sub-count" data-sub-count="tbl-creds"></span>
+    </div>
     <div class="export-toolbar">
       <button class="export-btn" onclick="exportTableCSV('tbl-creds')" disabled data-export-btn="tbl-creds">Export Selected to CSV</button>
       <button class="export-btn" onclick="exportTableXLSX('tbl-creds')" disabled data-export-btn="tbl-creds">Export Selected to XLSX</button>
+      <button class="export-all-btn" onclick="exportAllTableCSV('tbl-creds')">Export All to CSV</button>
       <span class="select-count" data-select-count="tbl-creds">0 selected</span>
       <button class="expand-all-btn" onclick="toggleExpandAll('tbl-creds', this)">Expand All</button>
     </div>
@@ -993,7 +1129,7 @@
         </thead>
         <tbody>
           {% for app in credential_apps %}
-          <tr class="expand-trigger" onclick="toggleRow('cred-{{ loop.index }}', this)" data-appid="{{ app.app_id | lower }}" data-band="{{ app.risk_band }}" data-risk-score="{{ app.risk_score }}" data-last-signin="{{ app.last_sign_in | format_date if app.last_sign_in else '' }}" data-days-since="{{ app.days_since_sign_in if app.days_since_sign_in is not none else '' }}" data-owner-count="{{ app.owner_count }}" data-assignment-count="{{ app.assignment_count }}" data-account-enabled="{{ 'yes' if app.account_enabled else 'no' }}" data-has-expired-secret="{{ 'yes' if app.has_expired_secret else 'no' }}" data-has-expired-cert="{{ 'yes' if app.has_expired_cert else 'no' }}" data-has-near-expiry-secret="{{ 'yes' if app.has_near_expiry_secret else 'no' }}" data-has-near-expiry-cert="{{ 'yes' if app.has_near_expiry_cert else 'no' }}" data-signal-keys="{{ app.signals | map(attribute='key') | join('|') }}" data-signal-count="{{ app.signals | length }}" data-primary-rec="{{ app.primary_recommendation | e }}">
+          <tr class="expand-trigger" onclick="toggleRow('cred-{{ loop.index }}', this)" data-appid="{{ app.app_id | lower }}" data-name="{{ app.display_name | lower }}" data-band="{{ app.risk_band }}" data-risk-score="{{ app.risk_score }}" data-last-signin="{{ app.last_sign_in | format_date if app.last_sign_in else '' }}" data-days-since="{{ app.days_since_sign_in if app.days_since_sign_in is not none else '' }}" data-owner-count="{{ app.owner_count }}" data-assignment-count="{{ app.assignment_count }}" data-account-enabled="{{ 'yes' if app.account_enabled else 'no' }}" data-has-expired-secret="{{ 'yes' if app.has_expired_secret else 'no' }}" data-has-expired-cert="{{ 'yes' if app.has_expired_cert else 'no' }}" data-has-near-expiry-secret="{{ 'yes' if app.has_near_expiry_secret else 'no' }}" data-has-near-expiry-cert="{{ 'yes' if app.has_near_expiry_cert else 'no' }}" data-signal-keys="{{ app.signals | map(attribute='key') | join('|') }}" data-signal-count="{{ app.signals | length }}" data-primary-rec="{{ app.primary_recommendation | e }}">
             <td class="cb-col" onclick="event.stopPropagation()"><input type="checkbox" class="row-select-cb" onchange="updateTableSelectCount('tbl-creds')"></td>
             <td>{{ app_cell(app) }}</td>
             <td data-val="{{ 1 if app.has_expired_secret else 0 }}">{% if app.has_expired_secret %}<span class="badge badge-critical">Yes</span>{% else %}—{% endif %}</td>
@@ -1057,9 +1193,18 @@
       <span class="section-banner-icon">&#128100;</span>
       Apps without a valid owner cannot be maintained. Assign an owner or consider removing these apps.
     </div>
+    <div class="progress-bar-wrap" data-progress="tbl-orphaned">
+      <div class="progress-track"><div class="progress-fill" style="width: 0%"></div></div>
+      <span class="progress-text">0 of {{ orphaned_apps | length }} reviewed</span>
+    </div>
+    <div class="sub-filter-bar">
+      <input type="text" placeholder="Search apps..." oninput="filterSubTable('tbl-orphaned', this.value)">
+      <span class="sub-count" data-sub-count="tbl-orphaned"></span>
+    </div>
     <div class="export-toolbar">
       <button class="export-btn" onclick="exportTableCSV('tbl-orphaned')" disabled data-export-btn="tbl-orphaned">Export Selected to CSV</button>
       <button class="export-btn" onclick="exportTableXLSX('tbl-orphaned')" disabled data-export-btn="tbl-orphaned">Export Selected to XLSX</button>
+      <button class="export-all-btn" onclick="exportAllTableCSV('tbl-orphaned')">Export All to CSV</button>
       <span class="select-count" data-select-count="tbl-orphaned">0 selected</span>
       <button class="expand-all-btn" onclick="toggleExpandAll('tbl-orphaned', this)">Expand All</button>
     </div>
@@ -1077,9 +1222,9 @@
         </thead>
         <tbody>
           {% for app in orphaned_apps %}
-          <tr class="expand-trigger" onclick="toggleRow('orphan-{{ loop.index }}', this)" data-appid="{{ app.app_id | lower }}" data-band="{{ app.risk_band }}" data-risk-score="{{ app.risk_score }}" data-last-signin="{{ app.last_sign_in | format_date if app.last_sign_in else '' }}" data-days-since="{{ app.days_since_sign_in if app.days_since_sign_in is not none else '' }}" data-owner-count="{{ app.owner_count }}" data-assignment-count="{{ app.assignment_count }}" data-account-enabled="{{ 'yes' if app.account_enabled else 'no' }}" data-signal-keys="{{ app.signals | map(attribute='key') | join('|') }}" data-signal-count="{{ app.signals | length }}" data-primary-rec="{{ app.primary_recommendation | e }}">
+          <tr class="expand-trigger" onclick="toggleRow('orphan-{{ loop.index }}', this)" data-appid="{{ app.app_id | lower }}" data-name="{{ app.display_name | lower }}" data-band="{{ app.risk_band }}" data-risk-score="{{ app.risk_score }}" data-last-signin="{{ app.last_sign_in | format_date if app.last_sign_in else '' }}" data-days-since="{{ app.days_since_sign_in if app.days_since_sign_in is not none else '' }}" data-owner-count="{{ app.owner_count }}" data-assignment-count="{{ app.assignment_count }}" data-account-enabled="{{ 'yes' if app.account_enabled else 'no' }}" data-signal-keys="{{ app.signals | map(attribute='key') | join('|') }}" data-signal-count="{{ app.signals | length }}" data-primary-rec="{{ app.primary_recommendation | e }}">
             <td class="cb-col" onclick="event.stopPropagation()"><input type="checkbox" class="row-select-cb" onchange="updateTableSelectCount('tbl-orphaned')"></td>
-            <td>{{ app_cell(app) }}</td>
+            <td>{{ app_cell(app) }}{{ signal_previews(app) }}</td>
             <td data-val="{{ app.owner_count }}">{{ app.owner_count }}</td>
             <td data-val="{{ app.disabled_owner_count }}">{{ app.disabled_owner_count }}</td>
             <td data-val="{{ app.days_since_sign_in if app.days_since_sign_in is not none else 99999 }}">{{ app.last_sign_in | format_date if app.last_sign_in else '—' }}</td>
@@ -1130,9 +1275,18 @@
       <span class="section-banner-icon">&#128274;</span>
       These apps hold powerful permissions but show little or no usage. Revoke unnecessary permissions or disable these apps.
     </div>
+    <div class="progress-bar-wrap" data-progress="tbl-priv">
+      <div class="progress-track"><div class="progress-fill" style="width: 0%"></div></div>
+      <span class="progress-text">0 of {{ high_privilege_apps | length }} reviewed</span>
+    </div>
+    <div class="sub-filter-bar">
+      <input type="text" placeholder="Search apps..." oninput="filterSubTable('tbl-priv', this.value)">
+      <span class="sub-count" data-sub-count="tbl-priv"></span>
+    </div>
     <div class="export-toolbar">
       <button class="export-btn" onclick="exportTableCSV('tbl-priv')" disabled data-export-btn="tbl-priv">Export Selected to CSV</button>
       <button class="export-btn" onclick="exportTableXLSX('tbl-priv')" disabled data-export-btn="tbl-priv">Export Selected to XLSX</button>
+      <button class="export-all-btn" onclick="exportAllTableCSV('tbl-priv')">Export All to CSV</button>
       <span class="select-count" data-select-count="tbl-priv">0 selected</span>
       <button class="expand-all-btn" onclick="toggleExpandAll('tbl-priv', this)">Expand All</button>
     </div>
@@ -1149,9 +1303,9 @@
         </thead>
         <tbody>
           {% for app in high_privilege_apps %}
-          <tr class="expand-trigger" onclick="toggleRow('priv-{{ loop.index }}', this)" data-appid="{{ app.app_id | lower }}" data-band="{{ app.risk_band }}" data-risk-score="{{ app.risk_score }}" data-last-signin="{{ app.last_sign_in | format_date if app.last_sign_in else '' }}" data-days-since="{{ app.days_since_sign_in if app.days_since_sign_in is not none else '' }}" data-owner-count="{{ app.owner_count }}" data-assignment-count="{{ app.assignment_count }}" data-account-enabled="{{ 'yes' if app.account_enabled else 'no' }}" data-has-high-privilege="yes" data-signal-keys="{{ app.signals | map(attribute='key') | join('|') }}" data-signal-count="{{ app.signals | length }}" data-primary-rec="{{ app.primary_recommendation | e }}">
+          <tr class="expand-trigger" onclick="toggleRow('priv-{{ loop.index }}', this)" data-appid="{{ app.app_id | lower }}" data-name="{{ app.display_name | lower }}" data-band="{{ app.risk_band }}" data-risk-score="{{ app.risk_score }}" data-last-signin="{{ app.last_sign_in | format_date if app.last_sign_in else '' }}" data-days-since="{{ app.days_since_sign_in if app.days_since_sign_in is not none else '' }}" data-owner-count="{{ app.owner_count }}" data-assignment-count="{{ app.assignment_count }}" data-account-enabled="{{ 'yes' if app.account_enabled else 'no' }}" data-has-high-privilege="yes" data-signal-keys="{{ app.signals | map(attribute='key') | join('|') }}" data-signal-count="{{ app.signals | length }}" data-primary-rec="{{ app.primary_recommendation | e }}">
             <td class="cb-col" onclick="event.stopPropagation()"><input type="checkbox" class="row-select-cb" onchange="updateTableSelectCount('tbl-priv')"></td>
-            <td>{{ app_cell(app) }}</td>
+            <td>{{ app_cell(app) }}{{ signal_previews(app) }}</td>
             <td data-val="{{ app.days_since_sign_in if app.days_since_sign_in is not none else 99999 }}">{{ app.last_sign_in | format_date if app.last_sign_in else '—' }}</td>
             <td><span class="badge badge-critical">Yes</span></td>
             <td data-val="{{ app.risk_score }}"><span class="badge badge-{{ app.risk_band }}">{{ app.risk_band }}</span></td>
@@ -1384,6 +1538,27 @@
 
 </div>
 
+<!-- ── Back to top button ──────────────────────────────────────────────────── -->
+<button class="back-to-top" id="back-to-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" title="Back to top (T)">&#8593;</button>
+
+<!-- ── Keyboard shortcuts modal ───────────────────────────────────────────── -->
+<div class="kbd-modal-overlay" id="kbd-modal" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="kbd-modal">
+    <h3>Keyboard Shortcuts</h3>
+    <div class="kbd-row"><span class="kbd-desc">Show this help</span><span class="kbd-key">?</span></div>
+    <div class="kbd-row"><span class="kbd-desc">Back to top</span><span class="kbd-key">T</span></div>
+    <div class="kbd-row"><span class="kbd-desc">Jump to Summary</span><span class="kbd-key">1</span></div>
+    <div class="kbd-row"><span class="kbd-desc">Jump to Inventory</span><span class="kbd-key">2</span></div>
+    <div class="kbd-row"><span class="kbd-desc">Jump to Critical &amp; High</span><span class="kbd-key">3</span></div>
+    <div class="kbd-row"><span class="kbd-desc">Jump to Stale</span><span class="kbd-key">4</span></div>
+    <div class="kbd-row"><span class="kbd-desc">Jump to Credentials</span><span class="kbd-key">5</span></div>
+    <div class="kbd-row"><span class="kbd-desc">Jump to Orphaned</span><span class="kbd-key">6</span></div>
+    <div class="kbd-row"><span class="kbd-desc">Jump to Over-Privileged</span><span class="kbd-key">7</span></div>
+    <div class="kbd-row"><span class="kbd-desc">Jump to CA Coverage</span><span class="kbd-key">8</span></div>
+    <div class="kbd-row"><span class="kbd-desc">Close modal / Escape</span><span class="kbd-key">Esc</span></div>
+  </div>
+</div>
+
 <!-- ── Footer ─────────────────────────────────────────────────────────────── -->
 <div class="footer">
   <div class="container">
@@ -1432,6 +1607,166 @@ function toggleExpandAll(tableId, btn) {
     btn.textContent = 'Collapse All';
   }
 }
+
+// ── Copy app ID to clipboard ─────────────────────────────────────────────────
+function copyAppId(btn, appId) {
+  navigator.clipboard.writeText(appId).then(function() {
+    btn.classList.add('copied');
+    btn.innerHTML = '&#10003;';
+    setTimeout(function() { btn.classList.remove('copied'); btn.innerHTML = '&#9112;'; }, 1500);
+  });
+}
+
+// ── Review status tracking (localStorage) ────────────────────────────────────
+var _reviewKey = 'ezapp-review-' + (document.title || 'report');
+
+function getReviewStore() {
+  try { return JSON.parse(localStorage.getItem(_reviewKey)) || {}; } catch(e) { return {}; }
+}
+
+function saveReviewStore(store) {
+  try { localStorage.setItem(_reviewKey, JSON.stringify(store)); } catch(e) {}
+}
+
+var _statusCycle = ['unreviewed', 'reviewed', 'flagged', 'remediated'];
+var _statusIcons = { unreviewed: '\u25CB', reviewed: '\u2713', flagged: '\u2691', remediated: '\u2714' };
+var _statusTitles = { unreviewed: 'Not reviewed', reviewed: 'Reviewed', flagged: 'Needs attention', remediated: 'Remediated' };
+
+function cycleReviewStatus(btn) {
+  var appId = btn.dataset.appid;
+  var current = btn.dataset.status;
+  var idx = _statusCycle.indexOf(current);
+  var next = _statusCycle[(idx + 1) % _statusCycle.length];
+  btn.dataset.status = next;
+  btn.innerHTML = _statusIcons[next];
+  btn.title = _statusTitles[next];
+  var store = getReviewStore();
+  if (next === 'unreviewed') { delete store[appId]; } else { store[appId] = next; }
+  saveReviewStore(store);
+  updateAllProgressBars();
+}
+
+function restoreReviewStatuses() {
+  var store = getReviewStore();
+  document.querySelectorAll('.review-status').forEach(function(btn) {
+    var status = store[btn.dataset.appid];
+    if (status && _statusCycle.indexOf(status) > 0) {
+      btn.dataset.status = status;
+      btn.innerHTML = _statusIcons[status];
+      btn.title = _statusTitles[status];
+    }
+  });
+}
+
+function updateAllProgressBars() {
+  ['tbl-critical', 'tbl-stale', 'tbl-creds', 'tbl-orphaned', 'tbl-priv'].forEach(function(tableId) {
+    var bar = document.querySelector('[data-progress="' + tableId + '"]');
+    if (!bar) return;
+    var btns = document.querySelectorAll('#' + tableId + ' .review-status');
+    var total = btns.length;
+    var reviewed = 0;
+    btns.forEach(function(b) { if (b.dataset.status !== 'unreviewed') reviewed++; });
+    var pct = total > 0 ? Math.round(reviewed / total * 100) : 0;
+    bar.querySelector('.progress-fill').style.width = pct + '%';
+    bar.querySelector('.progress-text').textContent = reviewed + ' of ' + total + ' reviewed';
+  });
+}
+
+// ── Sub-section table search/filter ──────────────────────────────────────────
+var _subFilterState = {};
+
+function filterSubTable(tableId, query) {
+  query = (query || '').toLowerCase();
+  _subFilterState[tableId] = query;
+  var rows = document.querySelectorAll('#' + tableId + ' tbody tr');
+  var visible = 0;
+  var total = 0;
+
+  rows.forEach(function(row) {
+    if (row.classList.contains('expand-row')) return;
+    total++;
+    var name = row.dataset.name || '';
+    var appid = row.dataset.appid || '';
+    var match = !query || name.includes(query) || appid.includes(query);
+    row.dataset._subFiltered = match ? '0' : '1';
+    if (!match) {
+      row.style.display = 'none';
+      var next = row.nextElementSibling;
+      if (next && next.classList.contains('expand-row')) { next.style.display = 'none'; next.classList.remove('open'); }
+      row.classList.remove('open');
+    }
+    if (match) visible++;
+  });
+
+  var counter = document.querySelector('[data-sub-count="' + tableId + '"]');
+  if (counter) {
+    counter.textContent = query ? visible + ' of ' + total + ' matching' : '';
+  }
+
+  // Re-apply pagination with filtered rows
+  if (_subPageState[tableId]) {
+    _subPageState[tableId].currentPage = 1;
+    applySubPaginationFiltered(tableId);
+  }
+}
+
+// ── Export all rows in a section to CSV ──────────────────────────────────────
+function exportAllTableCSV(tableId) {
+  var rows = document.querySelectorAll('#' + tableId + ' tbody tr:not(.expand-row)');
+  if (rows.length === 0) return;
+  var data = [];
+  rows.forEach(function(row) {
+    data.push({
+      app_name: row.querySelector('.app-name') ? row.querySelector('.app-name').textContent.replace(/[↗✓⚑✔○]/g,'').trim() : '',
+      app_id: row.dataset.appid || '',
+      risk_score: row.dataset.riskScore || '',
+      risk_band: row.dataset.band || '',
+      last_sign_in: row.dataset.lastSignin || '',
+      days_since_sign_in: row.dataset.daysSince || '',
+      owner_count: row.dataset.ownerCount || '',
+      assignment_count: row.dataset.assignmentCount || '',
+      account_enabled: row.dataset.accountEnabled || '',
+      signal_keys: row.dataset.signalKeys || '',
+      signal_count: row.dataset.signalCount || '',
+      primary_recommendation: row.dataset.primaryRec || ''
+    });
+  });
+  var csvLines = [_exportHeaders.join(',')];
+  data.forEach(function(row) {
+    csvLines.push(_exportHeaders.map(function(h) { return csvSafe(row[h]); }).join(','));
+  });
+  var blob = new Blob([csvLines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  downloadBlob(blob, 'enterprise_zapp_' + tableId.replace('tbl-','') + '_all.csv');
+}
+
+// ── Back to top button visibility ────────────────────────────────────────────
+(function() {
+  var btn = document.getElementById('back-to-top');
+  if (!btn) return;
+  window.addEventListener('scroll', function() {
+    btn.classList.toggle('visible', window.scrollY > 400);
+  }, { passive: true });
+})();
+
+// ── Keyboard shortcuts ──────────────────────────────────────────────────────
+(function() {
+  var sectionMap = { '1': 'sec-summary', '2': 'sec-inventory', '3': 'sec-critical', '4': 'sec-stale', '5': 'sec-creds', '6': 'sec-orphaned', '7': 'sec-priv', '8': 'sec-ca' };
+  document.addEventListener('keydown', function(e) {
+    // Ignore if typing in an input
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+    var modal = document.getElementById('kbd-modal');
+
+    if (e.key === 'Escape') { modal.classList.remove('open'); return; }
+    if (e.key === '?') { modal.classList.toggle('open'); e.preventDefault(); return; }
+    if (e.key === 't' || e.key === 'T') { window.scrollTo({top:0, behavior:'smooth'}); return; }
+
+    var sec = sectionMap[e.key];
+    if (sec) {
+      var el = document.getElementById(sec);
+      if (el) { el.scrollIntoView({ behavior: 'smooth' }); e.preventDefault(); }
+    }
+  });
+})();
 
 // ── Table sorting ────────────────────────────────────────────────────────────
 const sortState = {};
@@ -1732,7 +2067,19 @@ function downloadBlob(blob, filename) {
 var _subPageState = {};
 
 function getSubDataRows(tableId) {
-  return Array.from(document.querySelectorAll('#' + tableId + ' tbody tr:not(.expand-row)'));
+  return Array.from(document.querySelectorAll('#' + tableId + ' tbody tr:not(.expand-row)')).filter(function(row) {
+    return row.dataset._subFiltered !== '1';
+  });
+}
+
+function applySubPaginationFiltered(tableId) {
+  // Hide all rows first, then let pagination show the right ones
+  document.querySelectorAll('#' + tableId + ' tbody tr:not(.expand-row)').forEach(function(row) {
+    if (row.dataset._subFiltered === '1') {
+      row.style.display = 'none';
+    }
+  });
+  applySubPagination(tableId);
 }
 
 function applySubPagination(tableId) {
@@ -1831,6 +2178,10 @@ function changeSubPageSize(tableId, val) {
     applySubPagination(tableId);
   }
 });
+
+// Restore review statuses from localStorage and update progress bars
+restoreReviewStatuses();
+updateAllProgressBars();
 
 // ── Pagination for inventory table ───────────────────────────────────────────
 var _pageSize = 25;
