@@ -138,7 +138,11 @@
   tbody td { padding: 10px 14px; font-size: 13px; vertical-align: middle; }
   .app-name { font-weight: 600; color: var(--text); }
   .app-id   { font-size: 11px; color: var(--muted); font-family: monospace; }
-  .app-desc { font-size: 11px; color: var(--muted); margin-top: 3px; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-style: italic; }
+  .app-desc { font-size: 11px; color: var(--text-secondary, #9ca3af); margin-top: 3px; max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .app-desc-label { font-weight: 600; color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.03em; margin-right: 4px; }
+  .app-meta-block { margin-top: 10px; padding: 8px 12px; background: var(--surface); border-radius: 6px; border: 1px solid var(--border); font-size: 12px; color: var(--text); }
+  .app-meta-block .meta-label { font-weight: 600; color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.03em; display: block; margin-bottom: 2px; }
+  .app-meta-block .meta-value { white-space: pre-wrap; word-break: break-word; }
 
   /* ── Expandable rows ─────────────────────────────────────────────────── */
   .expand-row { display: none; background: var(--surface2); }
@@ -641,9 +645,23 @@
 {% macro app_cell(app) %}
 <div class="app-name"><button class="review-status" data-appid="{{ app.app_id | lower }}" data-status="unreviewed" onclick="event.stopPropagation(); cycleReviewStatus(this)" title="Click to mark review status">&#9675;</button>{{ app.display_name }}<a href="https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationMenuBlade/~/Overview/appId/{{ app.app_id }}" target="_blank" rel="noopener" title="Open in Entra admin center" class="entra-link">↗</a></div>
 <div class="app-id">{{ app.app_id }}<button class="copy-id-btn" onclick="event.stopPropagation(); copyAppId(this, '{{ app.app_id }}')" title="Copy app ID">&#9112;</button></div>
-{% set _desc = (app.description or app.notes or '') | trim %}
-{% if _desc %}
-<div class="app-desc" title="{{ _desc }}">{{ _desc[:100] }}{{ '…' if _desc | length > 100 else '' }}</div>
+{% set _notes = (app.notes or '') | trim %}
+{% set _desc = (app.description or '') | trim %}
+{% set _display = _notes or _desc %}
+{% if _display %}
+<div class="app-desc" title="{{ _display }}"><span class="app-desc-label">{{ 'Notes' if _notes else 'Desc' }}:</span>{{ _display[:120] }}{{ '…' if _display | length > 120 else '' }}</div>
+{% endif %}
+{% endmacro %}
+
+{# ── Reusable macro: notes/description block for expand rows ─────────────── #}
+{% macro app_meta_block(app) %}
+{% set _notes = (app.notes or '') | trim %}
+{% set _desc = (app.description or '') | trim %}
+{% if _notes or _desc %}
+<div class="app-meta-block">
+  {% if _notes %}<div><span class="meta-label">Notes</span><span class="meta-value">{{ _notes }}</span></div>{% endif %}
+  {% if _desc %}<div{% if _notes %} style="margin-top:6px;"{% endif %}><span class="meta-label">Description</span><span class="meta-value">{{ _desc }}</span></div>{% endif %}
+</div>
 {% endif %}
 {% endmacro %}
 
@@ -874,6 +892,7 @@
           <tr class="expand-row" id="inv-{{ loop.index }}">
             <td colspan="9">
               <div class="expand-content">
+                {{ app_meta_block(app) }}
                 {% for sig in app.signals %}
                 <div class="signal-block sev-{{ sig.severity }}">
                   <span class="signal-chip signal-{{ sig.severity }}">{{ sig.title }}</span>
@@ -971,6 +990,7 @@
           <tr class="expand-row" id="crit-{{ loop.index }}">
             <td colspan="8">
               <div class="expand-content">
+                {{ app_meta_block(app) }}
                 {% for sig in app.signals %}
                 <div class="signal-block sev-{{ sig.severity }}">
                   <span class="signal-chip signal-{{ sig.severity }}">{{ sig.title }}</span>
@@ -1055,6 +1075,7 @@
           <tr class="expand-row" id="stale-{{ loop.index }}">
             <td colspan="7">
               <div class="expand-content">
+                {{ app_meta_block(app) }}
                 {% for sig in app.signals %}
                 <div class="signal-block sev-{{ sig.severity }}">
                   <span class="signal-chip signal-{{ sig.severity }}">{{ sig.title }}</span>
@@ -1151,6 +1172,7 @@
           <tr class="expand-row" id="cred-{{ loop.index }}">
             <td colspan="9">
               <div class="expand-content">
+                {{ app_meta_block(app) }}
                 {% for sig in app.signals %}
                 <div class="signal-block sev-{{ sig.severity }}">
                   <span class="signal-chip signal-{{ sig.severity }}">{{ sig.title }}</span>
@@ -1233,6 +1255,7 @@
           <tr class="expand-row" id="orphan-{{ loop.index }}">
             <td colspan="6">
               <div class="expand-content">
+                {{ app_meta_block(app) }}
                 {% for sig in app.signals %}
                 <div class="signal-block sev-{{ sig.severity }}">
                   <span class="signal-chip signal-{{ sig.severity }}">{{ sig.title }}</span>
@@ -1313,6 +1336,7 @@
           <tr class="expand-row" id="priv-{{ loop.index }}">
             <td colspan="5">
               <div class="expand-content">
+                {{ app_meta_block(app) }}
                 {% for sig in app.signals %}
                 <div class="signal-block sev-{{ sig.severity }}">
                   <span class="signal-chip signal-{{ sig.severity }}">{{ sig.title }}</span>
@@ -1418,7 +1442,7 @@
 
     <!-- App coverage table -->
     <div class="section-title" style="font-size:15px; margin-bottom:12px; border-color: var(--ca-accent);">App Coverage</div>
-    <div class="table-wrap" style="margin-bottom:28px;">
+    <div class="table-wrap" style="margin-bottom:28px; max-height: 500px; overflow-y: auto;">
       <table id="tbl-ca-apps">
         <thead>
           <tr>
@@ -1459,7 +1483,7 @@
 
     <!-- Policy inventory table -->
     <div class="section-title" style="font-size:15px; margin-bottom:12px; border-color: var(--ca-accent);">Policy Inventory</div>
-    <div class="table-wrap">
+    <div class="table-wrap" style="max-height: 400px; overflow-y: auto;">
       <table id="tbl-ca-policies">
         <thead>
           <tr>
