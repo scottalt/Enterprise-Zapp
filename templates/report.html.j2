@@ -240,6 +240,15 @@
     background: var(--surface); border: 1px solid var(--border); color: var(--text);
     border-radius: 8px; padding: 8px 14px; font-size: 13px; outline: none; cursor: pointer;
   }
+  .filter-bar select:focus { border-color: var(--accent); }
+  .filter-bar .filter-group { display: flex; align-items: center; gap: 6px; }
+  .filter-bar .filter-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; white-space: nowrap; }
+  .filter-bar .filter-reset {
+    border: none; background: none; color: var(--muted); font-size: 11px;
+    cursor: pointer; padding: 2px 6px; border-radius: 4px; white-space: nowrap;
+  }
+  .filter-bar .filter-reset:hover { color: var(--accent); background: rgba(56,189,248,0.1); }
+  .filter-bar .active-filter { border-color: var(--accent) !important; color: var(--accent); }
 
   /* ── Risk band filter buttons ────────────────────────────────────────── */
   .band-filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
@@ -666,6 +675,7 @@
     .brand-logo { -webkit-text-fill-color: #4f46e5; }
     .surface, .surface2 { background: #f8fafc; }
     .filter-bar { display: none; }
+    .band-filters { display: none; }
     .export-toolbar { display: none; }
     .cb-col { display: none; }
     .sub-filter-bar { display: none; }
@@ -899,6 +909,57 @@
     </div>
     <div class="filter-bar">
       <input type="text" id="inv-search" placeholder="Search by name or app ID..." oninput="filterTable()">
+      <div class="filter-group">
+        <span class="filter-label">Enabled</span>
+        <select id="inv-filter-enabled" onchange="filterTable()">
+          <option value="">All</option>
+          <option value="yes">Enabled</option>
+          <option value="no">Disabled</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">Type</span>
+        <select id="inv-filter-sptype" onchange="filterTable()">
+          <option value="">All types</option>
+          <option value="Application">Application</option>
+          <option value="ManagedIdentity">Managed Identity</option>
+          <option value="Legacy">Legacy</option>
+          <option value="SocialIdp">Social IdP</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">Owners</span>
+        <select id="inv-filter-owners" onchange="filterTable()">
+          <option value="">All</option>
+          <option value="yes">Has owners</option>
+          <option value="no">No owners</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">Credentials</span>
+        <select id="inv-filter-creds" onchange="filterTable()">
+          <option value="">All</option>
+          <option value="yes">Expired / expiring</option>
+          <option value="no">OK / none</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">Privilege</span>
+        <select id="inv-filter-priv" onchange="filterTable()">
+          <option value="">All</option>
+          <option value="yes">High privilege</option>
+          <option value="no">Normal</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">SSO</span>
+        <select id="inv-filter-saml" onchange="filterTable()">
+          <option value="">All</option>
+          <option value="yes">SAML apps</option>
+          <option value="no">Non-SAML</option>
+        </select>
+      </div>
+      <button class="filter-reset" id="inv-filter-reset" onclick="resetFilters()" style="display:none;">Reset filters</button>
     </div>
     <div class="export-toolbar" id="export-toolbar">
       <button class="export-btn" id="btn-export-csv" onclick="exportSelectedCSV()" disabled data-export-btn="tbl-inventory">Export Selected to CSV</button>
@@ -937,6 +998,9 @@
               data-has-near-expiry-cert="{{ 'yes' if app.has_near_expiry_cert else 'no' }}"
               data-has-high-privilege="{{ 'yes' if app.has_high_privilege else 'no' }}"
               data-is-microsoft="{{ 'yes' if app.is_microsoft_first_party else 'no' }}"
+              data-is-saml="{{ 'yes' if app.is_saml_app else 'no' }}"
+              data-has-owners="{{ 'yes' if app.owner_count > 0 else 'no' }}"
+              data-has-cred-issue="{{ 'yes' if (app.has_expired_secret or app.has_expired_cert or app.has_near_expiry_secret or app.has_near_expiry_cert) else 'no' }}"
               data-signal-keys="{{ app.signals | map(attribute='key') | join('|') }}"
               data-signal-count="{{ app.signals | length }}"
               data-primary-rec="{{ app.primary_recommendation | e }}">
@@ -2039,10 +2103,55 @@ function toggleMicrosoft() {
 }
 
 // ── Inventory filter ─────────────────────────────────────────────────────────
+function _getDropdownFilters() {
+  return {
+    enabled: (document.getElementById('inv-filter-enabled') || {}).value || '',
+    spType:  (document.getElementById('inv-filter-sptype')  || {}).value || '',
+    owners:  (document.getElementById('inv-filter-owners')  || {}).value || '',
+    creds:   (document.getElementById('inv-filter-creds')   || {}).value || '',
+    priv:    (document.getElementById('inv-filter-priv')    || {}).value || '',
+    saml:    (document.getElementById('inv-filter-saml')    || {}).value || '',
+  };
+}
+
+function _hasActiveDropdown(df) {
+  return df.enabled || df.spType || df.owners || df.creds || df.priv || df.saml;
+}
+
+function _highlightActiveDropdowns(df) {
+  var ids = {
+    'inv-filter-enabled': df.enabled,
+    'inv-filter-sptype':  df.spType,
+    'inv-filter-owners':  df.owners,
+    'inv-filter-creds':   df.creds,
+    'inv-filter-priv':    df.priv,
+    'inv-filter-saml':    df.saml,
+  };
+  for (var id in ids) {
+    var el = document.getElementById(id);
+    if (el) {
+      if (ids[id]) { el.classList.add('active-filter'); } else { el.classList.remove('active-filter'); }
+    }
+  }
+  var resetBtn = document.getElementById('inv-filter-reset');
+  if (resetBtn) resetBtn.style.display = _hasActiveDropdown(df) ? '' : 'none';
+}
+
+function resetFilters() {
+  ['inv-filter-enabled','inv-filter-sptype','inv-filter-owners','inv-filter-creds','inv-filter-priv','inv-filter-saml'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  filterTable();
+}
+
 function filterTable() {
   const search = document.getElementById('inv-search').value.toLowerCase();
+  const df     = _getDropdownFilters();
   const rows   = document.querySelectorAll('#tbl-inventory tbody tr');
   let visible  = 0;
+
+  _highlightActiveDropdowns(df);
 
   rows.forEach(function(row) {
     // Expand rows follow their parent data row — skip independent evaluation.
@@ -2057,7 +2166,17 @@ function filterTable() {
     const matchBand      = !_activeBand || rband === _activeBand;
     const matchMicrosoft = !_hideMicrosoft || !isMsft;
 
-    const show = matchSearch && matchBand && matchMicrosoft;
+    // Dropdown filters
+    const matchEnabled = !df.enabled || row.dataset.accountEnabled === df.enabled;
+    const matchSpType  = !df.spType  || row.dataset.spType === df.spType;
+    const matchOwners  = !df.owners  || row.dataset.hasOwners === df.owners;
+    const matchCreds   = !df.creds   || row.dataset.hasCredIssue === df.creds;
+    const matchPriv    = !df.priv    || row.dataset.hasHighPrivilege === df.priv;
+    const matchSaml    = !df.saml    || row.dataset.isSaml === df.saml;
+
+    const show = matchSearch && matchBand && matchMicrosoft
+              && matchEnabled && matchSpType && matchOwners
+              && matchCreds && matchPriv && matchSaml;
     row.style.display = show ? '' : 'none';
 
     // Co-hide the sibling expand row so an open expand row doesn't orphan.
@@ -2466,7 +2585,10 @@ function changePageSize(val) {
 var _origFilterTable = filterTable;
 filterTable = function() {
   var search = document.getElementById('inv-search').value.toLowerCase();
+  var df = _getDropdownFilters();
   var rows = document.querySelectorAll('#tbl-inventory tbody tr');
+
+  _highlightActiveDropdowns(df);
 
   rows.forEach(function(row) {
     if (row.classList.contains('expand-row')) return;
@@ -2480,7 +2602,17 @@ filterTable = function() {
     var matchBand      = !_activeBand || rband === _activeBand;
     var matchMicrosoft = !_hideMicrosoft || !isMsft;
 
-    var show = matchSearch && matchBand && matchMicrosoft;
+    // Dropdown filters
+    var matchEnabled = !df.enabled || row.dataset.accountEnabled === df.enabled;
+    var matchSpType  = !df.spType  || row.dataset.spType === df.spType;
+    var matchOwners  = !df.owners  || row.dataset.hasOwners === df.owners;
+    var matchCreds   = !df.creds   || row.dataset.hasCredIssue === df.creds;
+    var matchPriv    = !df.priv    || row.dataset.hasHighPrivilege === df.priv;
+    var matchSaml    = !df.saml    || row.dataset.isSaml === df.saml;
+
+    var show = matchSearch && matchBand && matchMicrosoft
+            && matchEnabled && matchSpType && matchOwners
+            && matchCreds && matchPriv && matchSaml;
     row.dataset._filteredOut = show ? '0' : '1';
     if (!show) {
       row.style.display = 'none';
