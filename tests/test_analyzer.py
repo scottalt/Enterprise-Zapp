@@ -1356,3 +1356,228 @@ class TestSignInBreakdown:
         assert "Activity breakdown:" in sig.detail
         assert "Interactive: none" in sig.detail
         assert "App-only (client): none" in sig.detail
+
+
+# ── SAML app detection ──────────────────────────────────────────────────────
+
+
+class TestSamlDetection:
+    """Apps with preferredSingleSignOnMode=saml are detected and handled specially."""
+
+    def test_saml_app_detected(self):
+        sp = {**BASE_SP, "preferredSingleSignOnMode": "saml", "_signInActivity": {}}
+        result = analyze_app(sp)
+        assert result.is_saml_app
+        assert result.preferred_sso_mode == "saml"
+
+    def test_saml_app_no_sign_in_data_is_info(self):
+        """SAML app with no sign-in data gets info severity, not low."""
+        sp = {**BASE_SP, "preferredSingleSignOnMode": "saml", "_signInActivity": {}}
+        result = analyze_app(sp)
+        sig = next(s for s in result.signals if s.key == "no_sign_in_data")
+        assert sig.severity == "info"
+        assert sig.score_contribution == 0
+        assert "SAML" in sig.title
+
+    def test_saml_detail_mentions_entra_logs(self):
+        """SAML no_sign_in_data detail should mention checking Entra ID logs."""
+        sp = {**BASE_SP, "preferredSingleSignOnMode": "saml", "_signInActivity": {}}
+        result = analyze_app(sp)
+        sig = next(s for s in result.signals if s.key == "no_sign_in_data")
+        assert "Entra ID sign-in logs" in sig.detail
+
+    def test_non_saml_app_no_sign_in_data_is_low(self):
+        """Non-SAML app with no sign-in data still gets low severity."""
+        sp = {**BASE_SP, "_signInActivity": {}}
+        result = analyze_app(sp)
+        sig = next(s for s in result.signals if s.key == "no_sign_in_data")
+        assert sig.severity == "low"
+        assert sig.score_contribution == 5
+
+    def test_saml_sso_variant_detected(self):
+        """preferredSingleSignOnMode=samlsso is also detected."""
+        sp = {**BASE_SP, "preferredSingleSignOnMode": "samlsso", "_signInActivity": {}}
+        result = analyze_app(sp)
+        assert result.is_saml_app
+
+    def test_non_saml_mode_not_flagged(self):
+        """preferredSingleSignOnMode=password is NOT SAML."""
+        sp = {**BASE_SP, "preferredSingleSignOnMode": "password", "_signInActivity": {}}
+        result = analyze_app(sp)
+        assert not result.is_saml_app
+
+    def test_saml_app_with_sign_in_data_no_special_handling(self):
+        """SAML app that HAS sign-in data doesn't get no_sign_in_data signal."""
+        from datetime import datetime, timezone, timedelta
+        recent = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
+        sp = {
+            **BASE_SP,
+            "preferredSingleSignOnMode": "saml",
+            "_signInActivity": {
+                "lastSignInActivity": {"lastSignInDateTime": recent},
+            },
+        }
+        result = analyze_app(sp)
+        assert result.is_saml_app
+        assert not any(s.key == "no_sign_in_data" for s in result.signals)
+
+
+# ── lastSuccessfulSignInDateTime preference ─────────────────────────────────
+
+
+class TestSuccessfulSignInPreference:
+    """Staleness should use lastSuccessfulSignInDateTime over lastSignInDateTime."""
+
+    def test_successful_timestamp_preferred(self):
+        """When both timestamps exist, the successful one is used."""
+        from datetime import datetime, timezone, timedelta
+        # lastSignInDateTime is recent (includes failed attempts)
+        recent_any = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
+        # lastSuccessfulSignInDateTime is old
+        old_success = (datetime.now(timezone.utc) - timedelta(days=200)).isoformat()
+        sp = {
+            **BASE_SP,
+            "_signInActivity": {
+                "lastSignInActivity": {
+                    "lastSignInDateTime": recent_any,
+                    "lastSuccessfulSignInDateTime": old_success,
+                },
+            },
+        }
+        result = analyze_app(sp, stale_days=90)
+        # The successful timestamp is preferred, so app should be stale
+        assert any(s.key == "stale" for s in result.signals)
+
+    def test_fallback_to_any_when_no_successful(self):
+        """When lastSuccessfulSignInDateTime is absent, lastSignInDateTime is used."""
+        from datetime import datetime, timezone, timedelta
+        recent = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
+        sp = {
+            **BASE_SP,
+            "_signInActivity": {
+                "lastSignInActivity": {
+                    "lastSignInDateTime": recent,
+                    # no lastSuccessfulSignInDateTime
+                },
+            },
+        }
+        result = analyze_app(sp, stale_days=90)
+        assert not any(s.key == "stale" for s in result.signals)
+
+    def test_successful_recent_not_stale(self):
+        """When successful timestamp is recent, app is not stale."""
+        from datetime import datetime, timezone, timedelta
+        old_any = (datetime.now(timezone.utc) - timedelta(days=200)).isoformat()
+        recent_success = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
+        sp = {
+            **BASE_SP,
+            "_signInActivity": {
+                "lastSignInActivity": {
+                    "lastSignInDateTime": old_any,
+                    "lastSuccessfulSignInDateTime": recent_success,
+                },
+            },
+        }
+        result = analyze_app(sp, stale_days=90)
+        assert not any(s.key == "stale" for s in result.signals)
+
+
+# ── CA policy cross-reference ──────────────────────────────────────────────
+
+
+class TestCaPolicyCrossReference:
+    """CA policy targeting signal."""
+
+    def _make_ca_policy(self, name: str, include_app_ids: list[str], state: str = "enabled") -> dict:
+        return {
+            "id": f"policy-{name}",
+            "displayName": name,
+            "state": state,
+            "conditions": {
+                "applications": {
+                    "includeApplications": include_app_ids,
+                    "excludeApplications": [],
+                },
+            },
+        }
+
+    def test_app_targeted_by_ca_policy(self):
+        ca = [self._make_ca_policy("Block External", ["test-app-id"])]
+        result = analyze_app(BASE_SP, ca_policies=ca)
+        sig = next((s for s in result.signals if s.key == "ca_policy_target"), None)
+        assert sig is not None
+        assert sig.severity == "info"
+        assert sig.score_contribution == 0
+        assert "Block External" in sig.detail
+
+    def test_app_not_targeted_no_signal(self):
+        ca = [self._make_ca_policy("Block External", ["other-app-id"])]
+        result = analyze_app(BASE_SP, ca_policies=ca)
+        assert not any(s.key == "ca_policy_target" for s in result.signals)
+
+    def test_disabled_policy_ignored(self):
+        ca = [self._make_ca_policy("Block External", ["test-app-id"], state="disabled")]
+        result = analyze_app(BASE_SP, ca_policies=ca)
+        assert not any(s.key == "ca_policy_target" for s in result.signals)
+
+    def test_excluded_app_not_targeted(self):
+        ca = [{
+            "id": "policy-1",
+            "displayName": "Block All",
+            "state": "enabled",
+            "conditions": {
+                "applications": {
+                    "includeApplications": ["test-app-id"],
+                    "excludeApplications": ["test-app-id"],
+                },
+            },
+        }]
+        result = analyze_app(BASE_SP, ca_policies=ca)
+        assert not any(s.key == "ca_policy_target" for s in result.signals)
+
+    def test_multiple_policies_targeting_app(self):
+        ca = [
+            self._make_ca_policy("MFA Policy", ["test-app-id"]),
+            self._make_ca_policy("Location Policy", ["test-app-id"]),
+        ]
+        result = analyze_app(BASE_SP, ca_policies=ca)
+        sig = next(s for s in result.signals if s.key == "ca_policy_target")
+        assert "2" in sig.title
+        assert "policies" in sig.title
+        assert "MFA Policy" in sig.detail
+        assert "Location Policy" in sig.detail
+
+    def test_no_ca_policies_no_signal(self):
+        """When ca_policies is None, no CA signal fires."""
+        result = analyze_app(BASE_SP, ca_policies=None)
+        assert not any(s.key == "ca_policy_target" for s in result.signals)
+
+    def test_case_insensitive_matching(self):
+        """App IDs should match case-insensitively."""
+        sp = {**BASE_SP, "appId": "TEST-APP-ID"}
+        ca = [self._make_ca_policy("MFA", ["test-app-id"])]
+        result = analyze_app(sp, ca_policies=ca)
+        assert any(s.key == "ca_policy_target" for s in result.signals)
+
+
+# ── analyze_all passes ca_policies ──────────────────────────────────────────
+
+
+class TestAnalyzeAllCaPolicies:
+    """analyze_all should pass ca_policies from raw_data to analyze_app."""
+
+    def test_ca_policies_passed_through(self):
+        ca = [{
+            "id": "p1",
+            "displayName": "Test Policy",
+            "state": "enabled",
+            "conditions": {
+                "applications": {
+                    "includeApplications": ["test-app-id"],
+                    "excludeApplications": [],
+                },
+            },
+        }]
+        raw_data = {"apps": [BASE_SP], "ca_policies": ca}
+        results = analyze_all(raw_data)
+        assert any(s.key == "ca_policy_target" for s in results[0].signals)

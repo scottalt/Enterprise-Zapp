@@ -674,9 +674,15 @@
 {# ── Reusable macro: sign-in activity breakdown ───────────────────────────── #}
 {% macro signin_breakdown(app) %}
 <div class="signin-breakdown">
-  <span class="si-label">Sign-in Activity Breakdown</span>
+  <span class="si-label">Sign-in Activity Breakdown{% if app.is_saml_app %} <span style="display:inline-block;background:rgba(56,189,248,0.15);color:var(--accent);font-size:9px;padding:1px 6px;border-radius:3px;vertical-align:middle;margin-left:6px;font-weight:700;letter-spacing:0.05em;">SAML</span>{% endif %}</span>
   {% if not app.sign_in_data_available %}
-  <div style="font-size:12px; color:var(--muted); font-style:italic;">No sign-in data returned by Graph API for this app.</div>
+  <div style="font-size:12px; color:var(--muted); font-style:italic;">
+    {%- if app.is_saml_app -%}
+    SAML app — the servicePrincipalSignInActivities endpoint may not capture SAML sign-ins. Check Entra ID sign-in logs directly.
+    {%- else -%}
+    No sign-in data returned by Graph API for this app.
+    {%- endif -%}
+  </div>
   {% else %}
   <div class="signin-grid">
     {% set si_types = [

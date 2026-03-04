@@ -138,6 +138,10 @@ class AppResult:
     # Daemon/service app flag (only application-authentication activity, no delegated)
     is_daemon_app: bool = False
 
+    # SAML SSO detection
+    is_saml_app: bool = False
+    preferred_sso_mode: str | None = None
+
     # Sign-in activity breakdown — practitioner needs to see exactly which
     # activity types are present/absent to make informed decisions.
     last_interactive_sign_in: str | None = None
@@ -230,9 +234,9 @@ def _primary_recommendation(signals: list[Signal]) -> str:
 
 def _recommendation_for_signal(key: str) -> str:
     recs = {
-        "no_sign_in_data": "Verify this app's usage manually — sign-in data is unavailable. Check Azure AD sign-in logs or contact the app owner to confirm whether it is actively used.",
+        "no_sign_in_data": "Verify this app's usage manually — sign-in data is unavailable. Check Entra ID sign-in logs directly, or contact the app owner. Apps behind API gateways, reverse proxies, or using SAML/WS-Fed may not appear in the servicePrincipalSignInActivities endpoint.",
         "never_signed_in": "Review whether this app was ever needed. If recently created, allow time for setup. Otherwise, disable then delete.",
-        "stale": "Verify with the app owner whether this is still in use. For apps inactive 6+ months, escalate for decommission. For 1+ year, disable and delete.",
+        "stale": "Verify with the app owner whether this is still in use. Note: apps behind API gateways or reverse proxies may appear stale despite active usage. For apps inactive 6+ months, escalate for decommission. For 1+ year, disable and delete.",
         "no_owners": "Assign at least two owners to this app to ensure accountability.",
         "disabled_owner": "Replace disabled account owners with active users. Apps without valid owners have no accountability for credential rotation, incident response, or decommissioning.",
         "no_assignments": "Verify that assignment enforcement is enabled in the app's Enterprise Application settings. Without user/group assignments, any user in the tenant may be able to access this app. If the app is unused, disable or remove it.",
@@ -252,6 +256,7 @@ def _recommendation_for_signal(key: str) -> str:
         "multi_tenant_app": "Confirm this app must accept external tenant logins. If it only serves your organisation, restrict to 'Accounts in this organizational directory only' in the app registration manifest.",
         "mixed_credential_types": "This app has both client secrets and certificates. Remove any credentials that are no longer needed — each live credential is an independent attack vector.",
         "credential_sprawl": "Remove unused client secrets. Each credential is an independent attack vector — keep only what is actively needed.",
+        "ca_policy_target": "This app is explicitly targeted by a Conditional Access policy. It may exist as a configuration-only service principal — verify with your CA policy owners before removing.",
         "microsoft_first_party": "Microsoft first-party app — verify this service is still required and review any security signals flagged above.",
     }
     return recs.get(key, "Review and remediate flagged issues.")
@@ -281,6 +286,7 @@ def _doc_url_for_signal(key: str) -> str:
         "wildcard_redirect_uri":          "https://learn.microsoft.com/en-us/entra/identity-platform/reply-url",
         "implicit_grant_enabled":         "https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-implicit-grant-flow",
         "multi_tenant_app":               "https://learn.microsoft.com/en-us/entra/identity-platform/single-and-multi-tenant-apps",
+        "ca_policy_target":               "https://learn.microsoft.com/en-us/entra/identity/conditional-access/concept-conditional-access-cloud-apps",
         "microsoft_first_party":          "https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/manage-application-permissions",
     }
     return urls.get(key, "")
@@ -289,13 +295,21 @@ def _doc_url_for_signal(key: str) -> str:
 # ── Core analysis ─────────────────────────────────────────────────────────────
 
 
-def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
+def analyze_app(
+    sp: dict,
+    stale_days: int = DEFAULT_STALE_DAYS,
+    ca_policies: list[dict] | None = None,
+) -> AppResult:
     """
     Evaluate a single enriched service principal record and return an AppResult.
 
     `sp` must include the enrichment keys added by collector.py:
         _assignments, _owners, _delegatedGrants, _appPermissions,
         _signInActivity, _disabledOwnerIds
+
+    `ca_policies` (optional): raw CA policy dicts from the collector. When
+    provided, the analyzer checks if this specific app is explicitly targeted
+    by any enforced CA policy (useful context for configuration-only SPs).
     """
     now = _utcnow()
     signals: list[Signal] = []
@@ -328,14 +342,27 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
     password_creds: list[dict] = sp.get("passwordCredentials", [])
     key_creds: list[dict] = sp.get("keyCredentials", [])
 
+    # ── Classification: SSO mode (SAML detection) ──────────────────────────
+    preferred_sso_mode = sp.get("preferredSingleSignOnMode") or ""
+    is_saml_app = preferred_sso_mode.lower() in ("saml", "samlsso")
+
     # ── Signal: last sign-in / staleness ──────────────────────────────────
     # The beta servicePrincipalSignInActivities endpoint returns multiple
     # activity buckets.  We must check ALL of them and use the most recent
     # date to avoid false-positive staleness flags on apps that are actively
     # used via non-interactive or application-only (client_credentials) flows.
+    #
+    # IMPORTANT: We prefer lastSuccessfulSignInDateTime over lastSignInDateTime
+    # because the latter includes FAILED sign-in attempts. A failed sign-in
+    # should not count as "activity" for staleness purposes.
 
-    # Extract each activity type individually for the breakdown
-    _interactive_raw = sign_in.get("lastSignInActivity", {}).get("lastSignInDateTime")
+    # Extract each activity type individually for the breakdown.
+    # Prefer successful timestamps; fall back to lastSignInDateTime only when
+    # the successful variant is absent (older Graph API responses).
+    _interactive_success = sign_in.get("lastSignInActivity", {}).get("lastSuccessfulSignInDateTime")
+    _interactive_any = sign_in.get("lastSignInActivity", {}).get("lastSignInDateTime")
+    _interactive_raw = _interactive_success or _interactive_any
+
     _non_interactive_raw = sign_in.get("lastSignInActivity", {}).get("lastNonInteractiveSignInDateTime")
     _delegated_client_raw = sign_in.get("delegatedClientSignInActivity", {}).get("lastSignInDateTime")
     _delegated_resource_raw = sign_in.get("delegatedResourceSignInActivity", {}).get("lastSignInDateTime")
@@ -403,19 +430,35 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
         if not sign_in_data_available:
             # Graph returned no sign-in record for this app — we cannot determine
             # staleness.  Flag this explicitly so the practitioner knows to investigate.
-            signals.append(Signal(
-                key="no_sign_in_data",
-                severity="low",
-                title="No sign-in data available",
-                detail=(
-                    "The sign-in activity endpoint returned no record for this app. "
-                    "This may happen when the app uses SAML/WS-Fed only, was recently "
-                    "provisioned, or when Reports.Read.All was not granted. "
-                    "Staleness cannot be determined — manual review recommended."
-                ),
-                score_contribution=5,
-            ))
-            score += 5
+            if is_saml_app:
+                signals.append(Signal(
+                    key="no_sign_in_data",
+                    severity="info",
+                    title="SAML app — sign-in data may be incomplete",
+                    detail=(
+                        f"This app uses SAML SSO (preferredSingleSignOnMode: {preferred_sso_mode}). "
+                        "The servicePrincipalSignInActivities endpoint may not capture SAML "
+                        "sign-ins. Check the Entra ID sign-in logs directly for this app's "
+                        "activity. If the IdP is external (non-Entra), sign-ins will not "
+                        "appear in Entra logs at all."
+                    ),
+                    score_contribution=0,
+                ))
+            else:
+                signals.append(Signal(
+                    key="no_sign_in_data",
+                    severity="low",
+                    title="No sign-in data available",
+                    detail=(
+                        "The sign-in activity endpoint returned no record for this app. "
+                        "This may happen when the app uses SAML/WS-Fed, sits behind an "
+                        "API gateway or reverse proxy, was recently provisioned, or when "
+                        "Reports.Read.All was not granted. "
+                        "Staleness cannot be determined — manual review recommended."
+                    ),
+                    score_contribution=5,
+                ))
+                score += 5
         elif last_sign_in_dt is None:
             # Sign-in data record exists but app has never signed in across ANY flow type.
             # Grace period: apps created within NEVER_SIGNED_IN_GRACE_DAYS get
@@ -884,6 +927,38 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
             score_contribution=0,
         ))
 
+    # ── Signal: CA policy targeting (informational) ─────────────────────
+    # If CA policies were provided, check whether this app is explicitly
+    # targeted by any enforced policy.  This is purely informational —
+    # it helps the practitioner understand the app's role (e.g. a
+    # configuration-only SP that exists solely as a CA policy target).
+    ca_policy_names: list[str] = []
+    if ca_policies:
+        app_id_lower = app_id.lower()
+        for policy in ca_policies:
+            if policy.get("state") != "enabled":
+                continue
+            conditions = policy.get("conditions", {})
+            apps_cond = conditions.get("applications", {})
+            include_apps = [a.lower() for a in apps_cond.get("includeApplications", [])]
+            exclude_apps = [a.lower() for a in apps_cond.get("excludeApplications", [])]
+            if app_id_lower in include_apps and app_id_lower not in exclude_apps:
+                ca_policy_names.append(policy.get("displayName", "(unnamed)"))
+        if ca_policy_names:
+            signals.append(Signal(
+                key="ca_policy_target",
+                severity="info",
+                title=f"Targeted by {len(ca_policy_names)} CA {'policy' if len(ca_policy_names) == 1 else 'policies'}",
+                detail=(
+                    "This app is explicitly targeted (not via 'All apps') by the following "
+                    f"enforced Conditional Access {'policy' if len(ca_policy_names) == 1 else 'policies'}: "
+                    + ", ".join(ca_policy_names)
+                    + ". This may indicate the SP exists primarily as a CA policy target "
+                    "(configuration-only) rather than an active application."
+                ),
+                score_contribution=0,
+            ))
+
     # ── Signal: tool artifact ─────────────────────────────────────────────
     if is_tool_artifact:
         signals.append(Signal(
@@ -986,6 +1061,8 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
         is_multi_tenant=is_multi_tenant,
         has_mixed_credentials=has_mixed_credentials,
         is_daemon_app=is_daemon_app,
+        is_saml_app=is_saml_app,
+        preferred_sso_mode=preferred_sso_mode or None,
         last_interactive_sign_in=_interactive_raw,
         last_non_interactive_sign_in=_non_interactive_raw,
         last_delegated_client_sign_in=_delegated_client_raw,
@@ -1005,7 +1082,8 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
 
 def analyze_all(raw_data: dict, stale_days: int = DEFAULT_STALE_DAYS) -> list[AppResult]:
     """Analyze all apps from collected raw data. Returns sorted list (highest risk first)."""
-    results = [analyze_app(sp, stale_days) for sp in raw_data.get("apps", [])]
+    ca_policies = raw_data.get("ca_policies") or None
+    results = [analyze_app(sp, stale_days, ca_policies=ca_policies) for sp in raw_data.get("apps", [])]
     return sorted(results, key=lambda r: (-r.risk_score_raw, r.display_name.lower()))
 
 
