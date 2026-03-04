@@ -172,6 +172,37 @@
   .signal-medium   { background: rgba(234,179,8,0.1);  color: #fde047; border: 1px solid rgba(234,179,8,0.2); }
   .signal-low      { background: rgba(34,197,94,0.1);  color: #86efac; border: 1px solid rgba(34,197,94,0.2); }
 
+  /* ── Signal count badge ─────────────────────────────────────────────── */
+  .signal-count-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 24px; height: 24px; border-radius: 12px;
+    font-size: 11px; font-weight: 700; padding: 0 7px;
+    cursor: default;
+  }
+  .signal-count-badge.signal-critical { background: rgba(239,68,68,0.15); color: var(--critical); border: 1px solid rgba(239,68,68,0.3); }
+  .signal-count-badge.signal-high     { background: rgba(249,115,22,0.15); color: var(--high);     border: 1px solid rgba(249,115,22,0.3); }
+  .signal-count-badge.signal-medium   { background: rgba(234,179,8,0.15);  color: var(--medium);   border: 1px solid rgba(234,179,8,0.3); }
+  .signal-count-badge.signal-low      { background: rgba(34,197,94,0.15);  color: var(--low);      border: 1px solid rgba(34,197,94,0.3); }
+
+  /* ── Pagination controls ──────────────────────────────────────────── */
+  .pagination-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 12px; margin-top: 10px; font-size: 13px; color: var(--muted);
+  }
+  .pagination-bar select {
+    background: var(--surface); border: 1px solid var(--border); color: var(--text);
+    border-radius: 6px; padding: 4px 8px; font-size: 12px; cursor: pointer; outline: none;
+  }
+  .pagination-pages { display: flex; gap: 4px; align-items: center; }
+  .pagination-pages button {
+    background: var(--surface); border: 1px solid var(--border); color: var(--muted);
+    border-radius: 6px; padding: 4px 10px; font-size: 12px; font-weight: 600;
+    cursor: pointer; transition: background 0.15s, color 0.15s;
+  }
+  .pagination-pages button:hover:not(:disabled) { color: var(--text); border-color: var(--muted); }
+  .pagination-pages button.active { background: rgba(56,189,248,0.15); border-color: var(--accent); color: var(--accent); }
+  .pagination-pages button:disabled { opacity: 0.35; cursor: default; }
+
   /* ── Entra admin portal deep-link ───────────────────────────────────── */
   .entra-link {
     color: var(--accent);
@@ -660,14 +691,13 @@
             <td data-val="{{ app.assignment_count }}">{{ app.assignment_count }}</td>
             <td>{% if app.account_enabled %}<span style="color: var(--clean)">Yes</span>{% else %}<span style="color: var(--critical)">No</span>{% endif %}</td>
             <td>
-              <div class="signals" style="gap: 4px;">
-                {% for sig in app.signals[:3] %}
-                <span class="signal-chip signal-{{ sig.severity }}">{{ sig.title }}</span>
-                {% endfor %}
-                {% if app.signals | length > 3 %}
-                <span style="color: var(--muted); font-size: 11px;">+{{ app.signals | length - 3 }} more</span>
-                {% endif %}
-              </div>
+              {% if app.signals %}
+              {% set sev_order = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3} %}
+              {% set top_sev = app.signals | map(attribute='severity') | list | first %}
+              <span class="signal-count-badge signal-{{ top_sev }}" title="{{ app.signals | map(attribute='title') | join(', ') }}">{{ app.signals | length }}</span>
+              {% else %}
+              <span style="color: var(--muted); font-size: 11px;">0</span>
+              {% endif %}
             </td>
           </tr>
           <tr class="expand-row" id="inv-{{ loop.index }}">
@@ -690,7 +720,22 @@
         </tbody>
       </table>
     </div>
-    <div id="inv-count" style="margin-top: 8px; font-size: 12px; color: var(--muted);"></div>
+    <div class="pagination-bar" id="inv-pagination">
+      <div>
+        <span id="inv-count" style="font-size: 12px;"></span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <label style="font-size: 12px;">Rows per page:
+          <select id="inv-page-size" onchange="changePageSize(this.value)">
+            <option value="25" selected>25</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+            <option value="0">All</option>
+          </select>
+        </label>
+        <div class="pagination-pages" id="inv-pages"></div>
+      </div>
+    </div>
   </div>
 
   <!-- ── Critical & High Risk Apps ─────────────────────────────────────── -->
@@ -1351,8 +1396,7 @@ function filterTable() {
   }
 }
 
-// Init counter
-filterTable();
+// Init counter — handled by pagination-aware filterTable() override below.
 
 // ── Row selection & export (generic for all tables) ─────────────────────────
 var _exportHeaders = [
@@ -1499,6 +1543,159 @@ function downloadBlob(blob, filename) {
   document.body.removeChild(a);
   URL.revokeObjectURL(a.href);
 }
+
+// ── Pagination for inventory table ───────────────────────────────────────────
+var _pageSize = 25;
+var _currentPage = 1;
+
+function getVisibleDataRows() {
+  var rows = [];
+  document.querySelectorAll('#tbl-inventory tbody tr:not(.expand-row)').forEach(function(row) {
+    if (row.dataset._filteredOut !== '1') rows.push(row);
+  });
+  return rows;
+}
+
+function applyPagination() {
+  var visibleRows = getVisibleDataRows();
+  var total = visibleRows.length;
+  var totalPages = _pageSize > 0 ? Math.max(1, Math.ceil(total / _pageSize)) : 1;
+  if (_currentPage > totalPages) _currentPage = totalPages;
+
+  visibleRows.forEach(function(row, i) {
+    var inPage = _pageSize === 0 || (i >= (_currentPage - 1) * _pageSize && i < _currentPage * _pageSize);
+    row.style.display = inPage ? '' : 'none';
+    var next = row.nextElementSibling;
+    if (next && next.classList.contains('expand-row')) {
+      if (!inPage) {
+        next.style.display = 'none';
+      } else {
+        next.style.display = '';  // revert to CSS default
+      }
+    }
+  });
+
+  // Update counter
+  var startIdx = _pageSize > 0 ? (_currentPage - 1) * _pageSize + 1 : 1;
+  var endIdx = _pageSize > 0 ? Math.min(_currentPage * _pageSize, total) : total;
+  var allTotal = document.querySelectorAll('#tbl-inventory tbody tr:not(.expand-row)').length;
+  var counter = document.getElementById('inv-count');
+  if (total === 0) {
+    counter.textContent = 'No apps match filters';
+  } else if (total === allTotal && _pageSize === 0) {
+    counter.textContent = 'Showing all ' + total + ' apps';
+  } else if (_pageSize === 0) {
+    counter.textContent = 'Showing all ' + total + ' of ' + allTotal + ' apps';
+  } else {
+    counter.textContent = 'Showing ' + startIdx + '–' + endIdx + ' of ' + total + ' apps' + (total < allTotal ? ' (' + allTotal + ' total)' : '');
+  }
+
+  // Render page buttons
+  var pagesDiv = document.getElementById('inv-pages');
+  pagesDiv.innerHTML = '';
+  if (_pageSize > 0 && totalPages > 1) {
+    var prevBtn = document.createElement('button');
+    prevBtn.textContent = '\u2039';
+    prevBtn.disabled = _currentPage === 1;
+    prevBtn.onclick = function() { goToPage(_currentPage - 1); };
+    pagesDiv.appendChild(prevBtn);
+
+    // Show smart page range
+    var pages = [];
+    if (totalPages <= 7) {
+      for (var i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      if (_currentPage > 3) pages.push('...');
+      for (var i = Math.max(2, _currentPage - 1); i <= Math.min(totalPages - 1, _currentPage + 1); i++) pages.push(i);
+      if (_currentPage < totalPages - 2) pages.push('...');
+      pages.push(totalPages);
+    }
+    pages.forEach(function(p) {
+      if (p === '...') {
+        var span = document.createElement('span');
+        span.textContent = '...';
+        span.style.padding = '0 4px';
+        pagesDiv.appendChild(span);
+      } else {
+        var btn = document.createElement('button');
+        btn.textContent = p;
+        if (p === _currentPage) btn.classList.add('active');
+        btn.onclick = (function(page) { return function() { goToPage(page); }; })(p);
+        pagesDiv.appendChild(btn);
+      }
+    });
+
+    var nextBtn = document.createElement('button');
+    nextBtn.textContent = '\u203A';
+    nextBtn.disabled = _currentPage === totalPages;
+    nextBtn.onclick = function() { goToPage(_currentPage + 1); };
+    pagesDiv.appendChild(nextBtn);
+  }
+}
+
+function goToPage(page) {
+  _currentPage = page;
+  applyPagination();
+}
+
+function changePageSize(val) {
+  _pageSize = parseInt(val, 10);
+  _currentPage = 1;
+  applyPagination();
+}
+
+// Override filterTable to integrate with pagination
+var _origFilterTable = filterTable;
+filterTable = function() {
+  var search = document.getElementById('inv-search').value.toLowerCase();
+  var rows = document.querySelectorAll('#tbl-inventory tbody tr');
+
+  rows.forEach(function(row) {
+    if (row.classList.contains('expand-row')) return;
+
+    var name      = row.dataset.name      || '';
+    var appid     = row.dataset.appid     || '';
+    var rband     = row.dataset.band      || '';
+    var isMsft    = row.dataset.microsoft === 'true';
+
+    var matchSearch    = !search      || name.includes(search) || appid.includes(search);
+    var matchBand      = !_activeBand || rband === _activeBand;
+    var matchMicrosoft = !_hideMicrosoft || !isMsft;
+
+    var show = matchSearch && matchBand && matchMicrosoft;
+    row.dataset._filteredOut = show ? '0' : '1';
+    if (!show) {
+      row.style.display = 'none';
+      var next = row.nextElementSibling;
+      if (next && next.classList.contains('expand-row')) next.style.display = 'none';
+    }
+  });
+
+  // Keep toggle button count in sync
+  if (_hideMicrosoft) {
+    var msHiddenAndMatchOther = 0;
+    rows.forEach(function(row) {
+      if (row.classList.contains('expand-row')) return;
+      if (row.dataset.microsoft === 'true') {
+        var name   = row.dataset.name  || '';
+        var appid  = row.dataset.appid || '';
+        var rband  = row.dataset.band  || '';
+        var matchS = !search      || name.includes(search) || appid.includes(search);
+        var matchB = !_activeBand || rband === _activeBand;
+        if (matchS && matchB) msHiddenAndMatchOther++;
+      }
+    });
+    var btn = document.getElementById('ms-toggle');
+    btn.textContent = 'Show All (' + msHiddenAndMatchOther + ' Microsoft hidden)';
+  }
+
+  _currentPage = 1;
+  applyPagination();
+};
+
+// Re-run with pagination
+filterTable();
 
 // ── Dynamic nav height (used for section scroll-margin-top) ──────────────────
 // Tables no longer rely on --nav-height for their sticky headers — they use
