@@ -17,8 +17,12 @@ from typing import Any
 # ── Constants ─────────────────────────────────────────────────────────────────
 
 DEFAULT_STALE_DAYS = 90
+STALE_TIER_DECOMMISSION_DAYS = 180
+STALE_TIER_ABANDONED_DAYS = 365
 NEAR_EXPIRY_DAYS = 30
 NEAR_EXPIRY_WARN_DAYS = 90
+NEVER_SIGNED_IN_GRACE_DAYS = 30
+CREDENTIAL_SPRAWL_THRESHOLD = 3
 
 # Microsoft's well-known tenant IDs — used to identify Microsoft first-party apps.
 # Multiple Microsoft internal tenants publish service principals; all are treated
@@ -134,6 +138,14 @@ class AppResult:
     # Daemon/service app flag (only application-authentication activity, no delegated)
     is_daemon_app: bool = False
 
+    # Credential sprawl
+    credential_count: int = 0
+
+    # Action-type tags — tells the practitioner WHAT to do, not just what's wrong.
+    # Possible values: "delete", "rotate", "assign_owner", "review_permissions",
+    #                  "disable", "review_config"
+    action_tags: list[str] = field(default_factory=list)
+
     # Raw data for report drill-down
     owners: list[dict] = field(default_factory=list)
     password_credentials: list[dict] = field(default_factory=list)
@@ -208,8 +220,8 @@ def _primary_recommendation(signals: list[Signal]) -> str:
 
 def _recommendation_for_signal(key: str) -> str:
     recs = {
-        "never_signed_in": "Review whether this app was ever needed. If not in use, disable then delete.",
-        "stale": "Verify with the app owner whether this is still in use. If unused, disable and plan for removal.",
+        "never_signed_in": "Review whether this app was ever needed. If recently created, allow time for setup. Otherwise, disable then delete.",
+        "stale": "Verify with the app owner whether this is still in use. For apps inactive 6+ months, escalate for decommission. For 1+ year, disable and delete.",
         "no_owners": "Assign at least two owners to this app to ensure accountability.",
         "disabled_owner": "Replace disabled account owners with active users. Apps without valid owners have no accountability for credential rotation, incident response, or decommissioning.",
         "no_assignments": "Verify that assignment enforcement is enabled in the app's Enterprise Application settings. Without user/group assignments, any user in the tenant may be able to access this app. If the app is unused, disable or remove it.",
@@ -228,6 +240,7 @@ def _recommendation_for_signal(key: str) -> str:
         "implicit_grant_enabled": "Disable implicit grant flows in the app registration's Authentication blade. Migrate to authorization code flow with PKCE.",
         "multi_tenant_app": "Confirm this app must accept external tenant logins. If it only serves your organisation, restrict to 'Accounts in this organizational directory only' in the app registration manifest.",
         "mixed_credential_types": "This app has both client secrets and certificates. Remove any credentials that are no longer needed — each live credential is an independent attack vector.",
+        "credential_sprawl": "Remove unused client secrets. Each credential is an independent attack vector — keep only what is actively needed.",
         "microsoft_first_party": "Microsoft first-party app — verify this service is still required and review any security signals flagged above.",
     }
     return recs.get(key, "Review and remediate flagged issues.")
@@ -249,6 +262,7 @@ def _doc_url_for_signal(key: str) -> str:
         "expiry_warning_cert":            "https://learn.microsoft.com/en-us/entra/identity-platform/how-to-add-credentials",
         "long_lived_secret":              "https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/tutorial-enforce-secret-standards",
         "mixed_credential_types":         "https://learn.microsoft.com/en-us/entra/identity-platform/security-best-practices-for-app-registration",
+        "credential_sprawl":              "https://learn.microsoft.com/en-us/entra/identity-platform/security-best-practices-for-app-registration",
         "high_privilege_stale":           "https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/manage-application-permissions",
         "excessive_delegated_permissions":"https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/manage-application-permissions",
         "no_reply_urls":                  "https://learn.microsoft.com/en-us/entra/identity-platform/reply-url",
@@ -347,26 +361,78 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
     # Microsoft first-party apps skip: staleness, ownership, no_assignments, and
     # multi_tenant signals. They are managed by Microsoft and these signals are
     # either non-actionable or expected by design.
+    days_since_created = _days_since(created_dt)
+
     if not is_microsoft_first_party:
         if last_sign_in_dt is None and sign_in:
-            # Sign-in data available but app has never signed in
-            signals.append(Signal(
-                key="never_signed_in",
-                severity="high",
-                title="Never signed in",
-                detail="This app has sign-in activity tracking but has never authenticated.",
-                score_contribution=35,
-            ))
-            score += 35
+            # Sign-in data available but app has never signed in.
+            # Grace period: apps created within NEVER_SIGNED_IN_GRACE_DAYS get
+            # a lower severity — they may still be in setup.
+            if days_since_created is not None and days_since_created <= NEVER_SIGNED_IN_GRACE_DAYS:
+                signals.append(Signal(
+                    key="never_signed_in",
+                    severity="low",
+                    title=f"Never signed in (created {days_since_created} days ago)",
+                    detail=(
+                        "This app has never authenticated, but was created recently "
+                        f"({days_since_created} days ago). It may still be in setup."
+                    ),
+                    score_contribution=5,
+                ))
+                score += 5
+            else:
+                signals.append(Signal(
+                    key="never_signed_in",
+                    severity="high",
+                    title="Never signed in",
+                    detail=(
+                        "This app has sign-in activity tracking but has never authenticated."
+                        + (f" Created {days_since_created} days ago." if days_since_created else "")
+                    ),
+                    score_contribution=35,
+                ))
+                score += 35
         elif days_since is not None and days_since > stale_days:
-            signals.append(Signal(
-                key="stale",
-                severity="high",
-                title=f"Stale — last sign-in {days_since} days ago",
-                detail=f"No sign-in activity detected in the past {stale_days} days (last seen: {last_sign_in_raw}).",
-                score_contribution=30,
-            ))
-            score += 30
+            # ── Tiered staleness ──────────────────────────────────────
+            # 90-180 days  → medium: verify with owner
+            # 180-365 days → high: plan for decommission
+            # 365+ days    → critical: strong candidate for deletion
+            if days_since > STALE_TIER_ABANDONED_DAYS:
+                signals.append(Signal(
+                    key="stale",
+                    severity="critical",
+                    title=f"Abandoned — no sign-in for {days_since} days",
+                    detail=(
+                        f"This app has had no sign-in activity for over a year "
+                        f"(last seen: {last_sign_in_raw}). Strong candidate for immediate disable/delete."
+                    ),
+                    score_contribution=40,
+                ))
+                score += 40
+            elif days_since > STALE_TIER_DECOMMISSION_DAYS:
+                signals.append(Signal(
+                    key="stale",
+                    severity="high",
+                    title=f"Stale — no sign-in for {days_since} days",
+                    detail=(
+                        f"This app has had no sign-in activity for over 6 months "
+                        f"(last seen: {last_sign_in_raw}). Escalate and plan for decommission."
+                    ),
+                    score_contribution=30,
+                ))
+                score += 30
+            else:
+                signals.append(Signal(
+                    key="stale",
+                    severity="medium",
+                    title=f"Stale — last sign-in {days_since} days ago",
+                    detail=(
+                        f"No sign-in activity in the past {stale_days} days "
+                        f"(last seen: {last_sign_in_raw}). Verify with the app owner."
+                    ),
+                    score_contribution=20,
+                ))
+                score += 20
 
     # ── Signal: no owners ─────────────────────────────────────────────────
     # Microsoft first-party apps are managed by Microsoft and cannot have
@@ -451,25 +517,54 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
             elif days_left <= NEAR_EXPIRY_WARN_DAYS:
                 has_expiry_warning_cert = True
 
+    # Expired credentials on stale/abandoned apps are downgraded — the expired
+    # cred actually *reduces* risk (it's no longer usable as an attack vector).
+    # The real action is to delete the whole app, not rotate the credential.
+    _is_stale_or_abandoned = any(s.key in ("stale", "never_signed_in") for s in signals)
+
     if has_expired_secret:
-        signals.append(Signal(
-            key="expired_secret",
-            severity="critical",
-            title="Expired client secret(s)",
-            detail="One or more client secrets have passed their expiry date.",
-            score_contribution=25,
-        ))
-        score += 25
+        if _is_stale_or_abandoned:
+            signals.append(Signal(
+                key="expired_secret",
+                severity="info",
+                title="Expired client secret(s) (app is stale)",
+                detail=(
+                    "One or more client secrets have expired, but this app is stale or unused. "
+                    "The expired credential reduces attack surface. Focus on decommissioning the app."
+                ),
+                score_contribution=0,
+            ))
+        else:
+            signals.append(Signal(
+                key="expired_secret",
+                severity="critical",
+                title="Expired client secret(s)",
+                detail="One or more client secrets have passed their expiry date.",
+                score_contribution=25,
+            ))
+            score += 25
 
     if has_expired_cert:
-        signals.append(Signal(
-            key="expired_cert",
-            severity="critical",
-            title="Expired certificate(s)",
-            detail="One or more certificates have passed their expiry date.",
-            score_contribution=25,
-        ))
-        score += 25
+        if _is_stale_or_abandoned:
+            signals.append(Signal(
+                key="expired_cert",
+                severity="info",
+                title="Expired certificate(s) (app is stale)",
+                detail=(
+                    "One or more certificates have expired, but this app is stale or unused. "
+                    "The expired credential reduces attack surface. Focus on decommissioning the app."
+                ),
+                score_contribution=0,
+            ))
+        else:
+            signals.append(Signal(
+                key="expired_cert",
+                severity="critical",
+                title="Expired certificate(s)",
+                detail="One or more certificates have passed their expiry date.",
+                score_contribution=25,
+            ))
+            score += 25
 
     if has_near_expiry_secret and not has_expired_secret:
         signals.append(Signal(
@@ -549,6 +644,21 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
             score_contribution=5,
         ))
         score += 5
+
+    # ── Signal: credential sprawl (3+ secrets) ──────────────────────────
+    total_cred_count = len(password_creds) + len(key_creds)
+    if len(password_creds) >= CREDENTIAL_SPRAWL_THRESHOLD:
+        signals.append(Signal(
+            key="credential_sprawl",
+            severity="medium",
+            title=f"Credential sprawl — {len(password_creds)} client secrets",
+            detail=(
+                f"This app has {len(password_creds)} client secrets configured. "
+                "Each credential is an independent attack vector. Remove unused secrets."
+            ),
+            score_contribution=10,
+        ))
+        score += 10
 
     # ── Signal: redirect URIs ─────────────────────────────────────────────
     reply_urls: list[str] = sp.get("replyUrls", [])
@@ -735,6 +845,49 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
         sig.recommendation = _recommendation_for_signal(sig.key)
         sig.doc_url = _doc_url_for_signal(sig.key)
 
+    # ── Action tags ───────────────────────────────────────────────────────
+    # Derive practitioner-oriented action tags from the signal combination.
+    # These tell the practitioner WHAT to do rather than just what's wrong.
+    action_tags: list[str] = []
+    signal_keys = {s.key for s in signals}
+
+    # "delete" — app is abandoned / never used / disabled and lingering
+    _abandon_indicators = signal_keys & {"never_signed_in", "disabled_sp"}
+    _is_abandoned_stale = any(
+        s.key == "stale" and s.severity == "critical" for s in signals
+    )
+    if _abandon_indicators or _is_abandoned_stale:
+        action_tags.append("delete")
+
+    # "rotate" — active app with credential issues that need action.
+    # Only count credential signals that actually carry score (i.e. not
+    # downgraded-to-info expired creds on stale apps).
+    _cred_action_signals = [
+        s for s in signals
+        if s.key in {
+            "expired_secret", "expired_cert",
+            "near_expiry_secret", "near_expiry_cert",
+            "expiry_warning_secret", "expiry_warning_cert",
+        }
+        and s.score_contribution > 0
+    ]
+    if _cred_action_signals and "delete" not in action_tags:
+        action_tags.append("rotate")
+
+    # "assign_owner" — no owners or disabled owners
+    if signal_keys & {"no_owners", "disabled_owner"}:
+        action_tags.append("assign_owner")
+
+    # "review_permissions" — high privilege, excessive delegated, or multi-tenant w/ privilege
+    if signal_keys & {"high_privilege_stale", "excessive_delegated_permissions"}:
+        action_tags.append("review_permissions")
+    elif has_high_privilege or has_excessive_delegated:
+        action_tags.append("review_permissions")
+
+    # "review_config" — config issues (implicit grant, wildcard redirect, multi-tenant)
+    if signal_keys & {"implicit_grant_enabled", "wildcard_redirect_uri", "multi_tenant_app"}:
+        action_tags.append("review_config")
+
     # Store raw score before capping (used for sorting within the same band)
     score_raw = score
     score = min(score, 100)
@@ -775,6 +928,8 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
         is_multi_tenant=is_multi_tenant,
         has_mixed_credentials=has_mixed_credentials,
         is_daemon_app=is_daemon_app,
+        credential_count=total_cred_count,
+        action_tags=action_tags,
         owners=owners,
         password_credentials=password_creds,
         key_credentials=key_creds,

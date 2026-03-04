@@ -945,3 +945,328 @@ class TestDaemonApp:
         sp = {**BASE_SP, "_signInActivity": {}}
         result = analyze_app(sp)
         assert not result.is_daemon_app
+
+
+# ── Tiered staleness ─────────────────────────────────────────────────────────
+
+
+class TestTieredStaleness:
+    """Staleness tiers: 90-180 medium, 180-365 high, 365+ critical."""
+
+    def _make_sp_stale(self, days_ago: int) -> dict:
+        from datetime import datetime, timezone, timedelta
+        last_signin = (datetime.now(timezone.utc) - timedelta(days=days_ago)).isoformat()
+        return {
+            **BASE_SP,
+            "_signInActivity": {
+                "lastSignInActivity": {"lastSignInDateTime": last_signin}
+            },
+        }
+
+    def test_90_to_180_is_medium(self):
+        sp = self._make_sp_stale(120)
+        result = analyze_app(sp, stale_days=90)
+        stale_sigs = [s for s in result.signals if s.key == "stale"]
+        assert len(stale_sigs) == 1
+        assert stale_sigs[0].severity == "medium"
+        assert stale_sigs[0].score_contribution == 20
+
+    def test_180_to_365_is_high(self):
+        sp = self._make_sp_stale(250)
+        result = analyze_app(sp, stale_days=90)
+        stale_sigs = [s for s in result.signals if s.key == "stale"]
+        assert len(stale_sigs) == 1
+        assert stale_sigs[0].severity == "high"
+        assert stale_sigs[0].score_contribution == 30
+
+    def test_365_plus_is_critical(self):
+        sp = self._make_sp_stale(400)
+        result = analyze_app(sp, stale_days=90)
+        stale_sigs = [s for s in result.signals if s.key == "stale"]
+        assert len(stale_sigs) == 1
+        assert stale_sigs[0].severity == "critical"
+        assert stale_sigs[0].score_contribution == 40
+
+    def test_abandoned_title_contains_abandoned(self):
+        sp = self._make_sp_stale(400)
+        result = analyze_app(sp, stale_days=90)
+        stale_sigs = [s for s in result.signals if s.key == "stale"]
+        assert "Abandoned" in stale_sigs[0].title
+
+
+# ── Creation-age-aware never_signed_in ────────────────────────────────────────
+
+
+class TestNeverSignedInGracePeriod:
+    """Apps created recently get a lower-severity never_signed_in signal."""
+
+    def test_new_app_gets_low_severity(self):
+        from datetime import datetime, timezone, timedelta
+        recent_created = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
+        sp = {
+            **BASE_SP,
+            "createdDateTime": recent_created,
+            "_signInActivity": {
+                "lastSignInActivity": {}
+            },
+        }
+        result = analyze_app(sp)
+        nsi = [s for s in result.signals if s.key == "never_signed_in"]
+        assert len(nsi) == 1
+        assert nsi[0].severity == "low"
+        assert nsi[0].score_contribution == 5
+
+    def test_old_app_gets_high_severity(self):
+        from datetime import datetime, timezone, timedelta
+        old_created = (datetime.now(timezone.utc) - timedelta(days=200)).isoformat()
+        sp = {
+            **BASE_SP,
+            "createdDateTime": old_created,
+            "_signInActivity": {
+                "lastSignInActivity": {}
+            },
+        }
+        result = analyze_app(sp)
+        nsi = [s for s in result.signals if s.key == "never_signed_in"]
+        assert len(nsi) == 1
+        assert nsi[0].severity == "high"
+        assert nsi[0].score_contribution == 35
+
+    def test_grace_period_boundary(self):
+        from datetime import datetime, timezone, timedelta
+        # Exactly at grace period (30 days) — still within grace
+        boundary = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+        sp = {
+            **BASE_SP,
+            "createdDateTime": boundary,
+            "_signInActivity": {
+                "lastSignInActivity": {}
+            },
+        }
+        result = analyze_app(sp)
+        nsi = [s for s in result.signals if s.key == "never_signed_in"]
+        assert nsi[0].severity == "low"
+
+
+# ── Expired creds on stale apps ───────────────────────────────────────────────
+
+
+class TestExpiredCredsOnStaleApps:
+    """Expired credentials on stale/abandoned apps are downgraded to info."""
+
+    def test_expired_secret_on_stale_app_is_info(self):
+        from datetime import datetime, timezone, timedelta
+        old_signin = (datetime.now(timezone.utc) - timedelta(days=200)).isoformat()
+        sp = {
+            **BASE_SP,
+            "_signInActivity": {
+                "lastSignInActivity": {"lastSignInDateTime": old_signin}
+            },
+            "passwordCredentials": [{
+                "keyId": "old-key",
+                "displayName": "expired secret",
+                "startDateTime": (datetime.now(timezone.utc) - timedelta(days=400)).isoformat(),
+                "endDateTime": (datetime.now(timezone.utc) - timedelta(days=30)).isoformat(),
+            }],
+        }
+        result = analyze_app(sp, stale_days=90)
+        expired = [s for s in result.signals if s.key == "expired_secret"]
+        assert len(expired) == 1
+        assert expired[0].severity == "info"
+        assert expired[0].score_contribution == 0
+
+    def test_expired_secret_on_active_app_is_critical(self):
+        from datetime import datetime, timezone, timedelta
+        recent_signin = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
+        sp = {
+            **BASE_SP,
+            "_signInActivity": {
+                "lastSignInActivity": {"lastSignInDateTime": recent_signin}
+            },
+            "passwordCredentials": [{
+                "keyId": "old-key",
+                "displayName": "expired secret",
+                "startDateTime": (datetime.now(timezone.utc) - timedelta(days=400)).isoformat(),
+                "endDateTime": (datetime.now(timezone.utc) - timedelta(days=30)).isoformat(),
+            }],
+        }
+        result = analyze_app(sp, stale_days=90)
+        expired = [s for s in result.signals if s.key == "expired_secret"]
+        assert len(expired) == 1
+        assert expired[0].severity == "critical"
+        assert expired[0].score_contribution == 25
+
+    def test_expired_cert_on_never_signed_in_is_info(self):
+        from datetime import datetime, timezone, timedelta
+        sp = {
+            **BASE_SP,
+            "createdDateTime": (datetime.now(timezone.utc) - timedelta(days=200)).isoformat(),
+            "_signInActivity": {
+                "lastSignInActivity": {}
+            },
+            "keyCredentials": [{
+                "keyId": "old-cert",
+                "displayName": "expired cert",
+                "startDateTime": (datetime.now(timezone.utc) - timedelta(days=400)).isoformat(),
+                "endDateTime": (datetime.now(timezone.utc) - timedelta(days=30)).isoformat(),
+            }],
+        }
+        result = analyze_app(sp, stale_days=90)
+        expired = [s for s in result.signals if s.key == "expired_cert"]
+        assert len(expired) == 1
+        assert expired[0].severity == "info"
+
+
+# ── Credential sprawl ────────────────────────────────────────────────────────
+
+
+class TestCredentialSprawl:
+    """Apps with 3+ client secrets get a credential_sprawl signal."""
+
+    def _make_secret(self, key_id: str) -> dict:
+        from datetime import datetime, timezone, timedelta
+        now = datetime.now(timezone.utc)
+        return {
+            "keyId": key_id,
+            "displayName": f"secret-{key_id}",
+            "startDateTime": (now - timedelta(days=30)).isoformat(),
+            "endDateTime": (now + timedelta(days=60)).isoformat(),
+        }
+
+    def test_three_secrets_triggers_sprawl(self):
+        sp = {
+            **BASE_SP,
+            "replyUrls": ["https://app.contoso.com/callback"],
+            "passwordCredentials": [
+                self._make_secret("1"),
+                self._make_secret("2"),
+                self._make_secret("3"),
+            ],
+        }
+        result = analyze_app(sp)
+        assert result.credential_count == 3
+        sprawl = [s for s in result.signals if s.key == "credential_sprawl"]
+        assert len(sprawl) == 1
+        assert sprawl[0].severity == "medium"
+
+    def test_two_secrets_no_sprawl(self):
+        sp = {
+            **BASE_SP,
+            "replyUrls": ["https://app.contoso.com/callback"],
+            "passwordCredentials": [
+                self._make_secret("1"),
+                self._make_secret("2"),
+            ],
+        }
+        result = analyze_app(sp)
+        assert not any(s.key == "credential_sprawl" for s in result.signals)
+
+    def test_credential_count_includes_certs(self):
+        from datetime import datetime, timezone, timedelta
+        now = datetime.now(timezone.utc)
+        sp = {
+            **BASE_SP,
+            "replyUrls": ["https://app.contoso.com/callback"],
+            "passwordCredentials": [self._make_secret("1")],
+            "keyCredentials": [{
+                "keyId": "cert-1",
+                "displayName": "cert",
+                "startDateTime": (now - timedelta(days=30)).isoformat(),
+                "endDateTime": (now + timedelta(days=60)).isoformat(),
+            }],
+        }
+        result = analyze_app(sp)
+        assert result.credential_count == 2
+
+
+# ── Action tags ───────────────────────────────────────────────────────────────
+
+
+class TestActionTags:
+    """Action tags tell the practitioner what to DO."""
+
+    def test_abandoned_app_gets_delete_tag(self):
+        from datetime import datetime, timezone, timedelta
+        old = (datetime.now(timezone.utc) - timedelta(days=400)).isoformat()
+        sp = {
+            **BASE_SP,
+            "_signInActivity": {
+                "lastSignInActivity": {"lastSignInDateTime": old}
+            },
+        }
+        result = analyze_app(sp, stale_days=90)
+        assert "delete" in result.action_tags
+
+    def test_never_signed_in_gets_delete_tag(self):
+        from datetime import datetime, timezone, timedelta
+        sp = {
+            **BASE_SP,
+            "createdDateTime": (datetime.now(timezone.utc) - timedelta(days=200)).isoformat(),
+            "_signInActivity": {
+                "lastSignInActivity": {}
+            },
+        }
+        result = analyze_app(sp)
+        assert "delete" in result.action_tags
+
+    def test_disabled_sp_gets_delete_tag(self):
+        sp = {**BASE_SP, "accountEnabled": False}
+        result = analyze_app(sp)
+        assert "delete" in result.action_tags
+
+    def test_active_app_expired_cred_gets_rotate_tag(self):
+        from datetime import datetime, timezone, timedelta
+        now = datetime.now(timezone.utc)
+        recent = (now - timedelta(days=10)).isoformat()
+        sp = {
+            **BASE_SP,
+            "_signInActivity": {
+                "lastSignInActivity": {"lastSignInDateTime": recent}
+            },
+            "passwordCredentials": [{
+                "keyId": "old-key",
+                "displayName": "expired",
+                "startDateTime": (now - timedelta(days=400)).isoformat(),
+                "endDateTime": (now - timedelta(days=30)).isoformat(),
+            }],
+        }
+        result = analyze_app(sp, stale_days=90)
+        assert "rotate" in result.action_tags
+        assert "delete" not in result.action_tags
+
+    def test_stale_app_expired_cred_gets_delete_not_rotate(self):
+        """Stale app with expired creds should get 'delete', not 'rotate'."""
+        from datetime import datetime, timezone, timedelta
+        now = datetime.now(timezone.utc)
+        old = (now - timedelta(days=400)).isoformat()
+        sp = {
+            **BASE_SP,
+            "_signInActivity": {
+                "lastSignInActivity": {"lastSignInDateTime": old}
+            },
+            "passwordCredentials": [{
+                "keyId": "old-key",
+                "displayName": "expired",
+                "startDateTime": (now - timedelta(days=500)).isoformat(),
+                "endDateTime": (now - timedelta(days=30)).isoformat(),
+            }],
+        }
+        result = analyze_app(sp, stale_days=90)
+        assert "delete" in result.action_tags
+        # expired_secret on stale app is info/0-score, so no rotate tag
+        # but the signal key is still there
+        assert "rotate" not in result.action_tags
+
+    def test_no_owners_gets_assign_owner_tag(self):
+        sp = {**BASE_SP, "_owners": [], "_disabledOwnerIds": []}
+        result = analyze_app(sp)
+        assert "assign_owner" in result.action_tags
+
+    def test_implicit_grant_gets_review_config_tag(self):
+        sp = {**BASE_SP, "oauth2AllowImplicitFlow": True}
+        result = analyze_app(sp)
+        assert "review_config" in result.action_tags
+
+    def test_clean_app_has_no_action_tags(self):
+        result = analyze_app(BASE_SP)
+        assert result.action_tags == []
