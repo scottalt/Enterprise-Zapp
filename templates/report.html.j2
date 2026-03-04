@@ -216,6 +216,11 @@
     opacity: 0.6;
   }
   .entra-link:hover { opacity: 1; }
+  .saml-badge {
+    display: inline-block; background: rgba(56,189,248,0.15); color: var(--accent);
+    font-size: 9px; padding: 1px 6px; border-radius: 3px; vertical-align: middle;
+    margin-left: 6px; font-weight: 700; letter-spacing: 0.05em;
+  }
 
   /* ── Recommendation box ──────────────────────────────────────────────── */
   .rec-box {
@@ -684,7 +689,7 @@
 
 {# ── Reusable macro: app name / app ID / description cell ──────────────────── #}
 {% macro app_cell(app) %}
-<div class="app-name"><button class="review-status" data-appid="{{ app.app_id | lower }}" data-status="unreviewed" onclick="event.stopPropagation(); cycleReviewStatus(this)" title="Click to mark review status">&#9675;</button>{{ app.display_name }}<a href="https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationMenuBlade/~/Overview/appId/{{ app.app_id }}" target="_blank" rel="noopener" title="Open in Entra admin center" class="entra-link">↗</a></div>
+<div class="app-name"><button class="review-status" data-appid="{{ app.app_id | lower }}" data-status="unreviewed" onclick="event.stopPropagation(); cycleReviewStatus(this)" title="Click to mark review status">&#9675;</button>{{ app.display_name }}{% if app.is_saml_app %}<span class="saml-badge">SAML</span>{% endif %}<a href="https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationMenuBlade/~/Overview/appId/{{ app.app_id }}" target="_blank" rel="noopener" title="Open in Entra admin center" class="entra-link">↗</a></div>
 <div class="app-id">{{ app.app_id }}<button class="copy-id-btn" onclick="event.stopPropagation(); copyAppId(this, '{{ app.app_id }}')" title="Copy app ID">&#9112;</button></div>
 {% set _notes = (app.notes or '') | trim %}
 {% set _desc = (app.description or '') | trim %}
@@ -698,10 +703,11 @@
 {% macro app_meta_block(app) %}
 {% set _notes = (app.notes or '') | trim %}
 {% set _desc = (app.description or '') | trim %}
-{% if _notes or _desc %}
+{% if _notes or _desc or app.preferred_sso_mode %}
 <div class="app-meta-block">
-  {% if _notes %}<div><span class="meta-label">Notes</span><span class="meta-value">{{ _notes }}</span></div>{% endif %}
-  {% if _desc %}<div{% if _notes %} style="margin-top:6px;"{% endif %}><span class="meta-label">Description</span><span class="meta-value">{{ _desc }}</span></div>{% endif %}
+  {% if app.preferred_sso_mode %}<div><span class="meta-label">SSO Mode</span><span class="meta-value">{{ app.preferred_sso_mode }}</span></div>{% endif %}
+  {% if _notes %}<div{% if app.preferred_sso_mode %} style="margin-top:6px;"{% endif %}><span class="meta-label">Notes</span><span class="meta-value">{{ _notes }}</span></div>{% endif %}
+  {% if _desc %}<div{% if app.preferred_sso_mode or _notes %} style="margin-top:6px;"{% endif %}><span class="meta-label">Description</span><span class="meta-value">{{ _desc }}</span></div>{% endif %}
 </div>
 {% endif %}
 {% endmacro %}
@@ -1628,7 +1634,7 @@
           {% for app in group.apps %}
           <div class="owner-app-row">
             <div class="owner-app-name">
-              <a href="https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationMenuBlade/~/Overview/appId/{{ app.app_id }}" target="_blank" rel="noopener" title="Open in Entra admin center">{{ app.display_name }}</a>
+              <a href="https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationMenuBlade/~/Overview/appId/{{ app.app_id }}" target="_blank" rel="noopener" title="Open in Entra admin center">{{ app.display_name }}</a>{% if app.is_saml_app %}<span class="saml-badge">SAML</span>{% endif %}
               <span style="font-size:11px; color:var(--muted); margin-left:6px;">{{ app.app_id }}</span>
             </div>
             <div class="owner-app-score" style="color: var(--{{ app.risk_band }})">{{ app.risk_score }}</div>
