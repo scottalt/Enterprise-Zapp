@@ -867,6 +867,20 @@
         </tbody>
       </table>
     </div>
+    <div class="pagination-bar" data-pagination="tbl-critical">
+      <div><span class="pg-count" data-pg-count="tbl-critical"></span></div>
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <label style="font-size: 12px;">Rows per page:
+          <select onchange="changeSubPageSize('tbl-critical', this.value)">
+            <option value="25" selected>25</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+            <option value="0">All</option>
+          </select>
+        </label>
+        <div class="pagination-pages" data-pg-pages="tbl-critical"></div>
+      </div>
+    </div>
   </div>
   {% endif %}
 
@@ -927,6 +941,20 @@
           {% endfor %}
         </tbody>
       </table>
+    </div>
+    <div class="pagination-bar" data-pagination="tbl-stale">
+      <div><span class="pg-count" data-pg-count="tbl-stale"></span></div>
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <label style="font-size: 12px;">Rows per page:
+          <select onchange="changeSubPageSize('tbl-stale', this.value)">
+            <option value="25" selected>25</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+            <option value="0">All</option>
+          </select>
+        </label>
+        <div class="pagination-pages" data-pg-pages="tbl-stale"></div>
+      </div>
     </div>
   </div>
   {% endif %}
@@ -1001,6 +1029,20 @@
         </tbody>
       </table>
     </div>
+    <div class="pagination-bar" data-pagination="tbl-creds">
+      <div><span class="pg-count" data-pg-count="tbl-creds"></span></div>
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <label style="font-size: 12px;">Rows per page:
+          <select onchange="changeSubPageSize('tbl-creds', this.value)">
+            <option value="25" selected>25</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+            <option value="0">All</option>
+          </select>
+        </label>
+        <div class="pagination-pages" data-pg-pages="tbl-creds"></div>
+      </div>
+    </div>
   </div>
   {% endif %}
 
@@ -1060,6 +1102,20 @@
         </tbody>
       </table>
     </div>
+    <div class="pagination-bar" data-pagination="tbl-orphaned">
+      <div><span class="pg-count" data-pg-count="tbl-orphaned"></span></div>
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <label style="font-size: 12px;">Rows per page:
+          <select onchange="changeSubPageSize('tbl-orphaned', this.value)">
+            <option value="25" selected>25</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+            <option value="0">All</option>
+          </select>
+        </label>
+        <div class="pagination-pages" data-pg-pages="tbl-orphaned"></div>
+      </div>
+    </div>
   </div>
   {% endif %}
 
@@ -1116,6 +1172,20 @@
           {% endfor %}
         </tbody>
       </table>
+    </div>
+    <div class="pagination-bar" data-pagination="tbl-priv">
+      <div><span class="pg-count" data-pg-count="tbl-priv"></span></div>
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <label style="font-size: 12px;">Rows per page:
+          <select onchange="changeSubPageSize('tbl-priv', this.value)">
+            <option value="25" selected>25</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+            <option value="0">All</option>
+          </select>
+        </label>
+        <div class="pagination-pages" data-pg-pages="tbl-priv"></div>
+      </div>
     </div>
   </div>
   {% endif %}
@@ -1399,6 +1469,12 @@ function sortTable(tableId, colIndex) {
     tbody.appendChild(data);
     if (expand) tbody.appendChild(expand);
   });
+
+  // Re-apply sub-section pagination after sort
+  if (_subPageState[tableId]) {
+    _subPageState[tableId].currentPage = 1;
+    applySubPagination(tableId);
+  }
 }
 
 // ── Inventory filter state ────────────────────────────────────────────────────
@@ -1651,6 +1727,110 @@ function downloadBlob(blob, filename) {
   document.body.removeChild(a);
   URL.revokeObjectURL(a.href);
 }
+
+// ── Generic pagination for sub-section tables ───────────────────────────────
+var _subPageState = {};
+
+function getSubDataRows(tableId) {
+  return Array.from(document.querySelectorAll('#' + tableId + ' tbody tr:not(.expand-row)'));
+}
+
+function applySubPagination(tableId) {
+  var state = _subPageState[tableId];
+  if (!state) return;
+  var rows = getSubDataRows(tableId);
+  var total = rows.length;
+  var ps = state.pageSize;
+  var totalPages = ps > 0 ? Math.max(1, Math.ceil(total / ps)) : 1;
+  if (state.currentPage > totalPages) state.currentPage = totalPages;
+
+  rows.forEach(function(row, i) {
+    var inPage = ps === 0 || (i >= (state.currentPage - 1) * ps && i < state.currentPage * ps);
+    row.style.display = inPage ? '' : 'none';
+    var next = row.nextElementSibling;
+    if (next && next.classList.contains('expand-row')) {
+      if (!inPage) {
+        next.style.display = 'none';
+        next.classList.remove('open');
+        row.classList.remove('open');
+      } else {
+        next.style.display = '';
+      }
+    }
+  });
+
+  // Update counter
+  var startIdx = ps > 0 ? (state.currentPage - 1) * ps + 1 : 1;
+  var endIdx = ps > 0 ? Math.min(state.currentPage * ps, total) : total;
+  var counter = document.querySelector('[data-pg-count="' + tableId + '"]');
+  if (counter) {
+    if (total === 0) {
+      counter.textContent = 'No apps';
+    } else if (ps === 0) {
+      counter.textContent = 'Showing all ' + total + ' apps';
+    } else {
+      counter.textContent = 'Showing ' + startIdx + '\u2013' + endIdx + ' of ' + total + ' apps';
+    }
+  }
+
+  // Render page buttons
+  var pagesDiv = document.querySelector('[data-pg-pages="' + tableId + '"]');
+  if (!pagesDiv) return;
+  pagesDiv.innerHTML = '';
+  if (ps > 0 && totalPages > 1) {
+    var prevBtn = document.createElement('button');
+    prevBtn.textContent = '\u2039';
+    prevBtn.disabled = state.currentPage === 1;
+    prevBtn.onclick = function() { state.currentPage--; applySubPagination(tableId); };
+    pagesDiv.appendChild(prevBtn);
+
+    var pages = [];
+    if (totalPages <= 7) {
+      for (var i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      if (state.currentPage > 3) pages.push('...');
+      for (var i = Math.max(2, state.currentPage - 1); i <= Math.min(totalPages - 1, state.currentPage + 1); i++) pages.push(i);
+      if (state.currentPage < totalPages - 2) pages.push('...');
+      pages.push(totalPages);
+    }
+    pages.forEach(function(p) {
+      if (p === '...') {
+        var span = document.createElement('span');
+        span.textContent = '...';
+        span.style.padding = '0 4px';
+        pagesDiv.appendChild(span);
+      } else {
+        var btn = document.createElement('button');
+        btn.textContent = p;
+        if (p === state.currentPage) btn.classList.add('active');
+        btn.onclick = (function(page) { return function() { state.currentPage = page; applySubPagination(tableId); }; })(p);
+        pagesDiv.appendChild(btn);
+      }
+    });
+
+    var nextBtn = document.createElement('button');
+    nextBtn.textContent = '\u203A';
+    nextBtn.disabled = state.currentPage === totalPages;
+    nextBtn.onclick = function() { state.currentPage++; applySubPagination(tableId); };
+    pagesDiv.appendChild(nextBtn);
+  }
+}
+
+function changeSubPageSize(tableId, val) {
+  if (!_subPageState[tableId]) _subPageState[tableId] = { pageSize: 25, currentPage: 1 };
+  _subPageState[tableId].pageSize = parseInt(val, 10);
+  _subPageState[tableId].currentPage = 1;
+  applySubPagination(tableId);
+}
+
+// Initialize pagination for all sub-section tables
+['tbl-critical', 'tbl-stale', 'tbl-creds', 'tbl-orphaned', 'tbl-priv'].forEach(function(tableId) {
+  if (document.getElementById(tableId)) {
+    _subPageState[tableId] = { pageSize: 25, currentPage: 1 };
+    applySubPagination(tableId);
+  }
+});
 
 // ── Pagination for inventory table ───────────────────────────────────────────
 var _pageSize = 25;
