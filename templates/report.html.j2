@@ -703,7 +703,7 @@
 
 {# ── Reusable macro: app name / app ID / description cell ──────────────────── #}
 {% macro app_cell(app) %}
-<div class="app-name"><button class="review-status" data-appid="{{ app.app_id | lower }}" data-status="unreviewed" onclick="event.stopPropagation(); cycleReviewStatus(this)" title="Click to mark review status">&#9675;</button>{{ app.display_name }}{% if app.sso_method %}{% if app.is_saml_app %}<span class="saml-badge">SAML</span>{% elif app.sso_method == 'OIDC' %}<span class="sso-badge sso-badge-oidc">OIDC</span>{% elif app.sso_method == 'Password' %}<span class="sso-badge sso-badge-password">Password SSO</span>{% elif app.sso_method == 'Linked' %}<span class="sso-badge sso-badge-linked">Linked</span>{% else %}<span class="sso-badge sso-badge-other">{{ app.sso_method }}</span>{% endif %}{% endif %}<a href="https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationMenuBlade/~/Overview/appId/{{ app.app_id }}" target="_blank" rel="noopener" title="Open in Entra admin center" class="entra-link">↗</a></div>
+<div class="app-name"><button class="review-status" data-appid="{{ app.app_id | lower }}" data-status="unreviewed" onclick="event.stopPropagation(); cycleReviewStatus(this)" title="Click to mark review status">&#9675;</button>{{ app.display_name }}{% if app.sso_method %}{% if app.is_saml_app %}<span class="saml-badge">SAML</span>{% elif app.sso_method == 'OIDC' %}<span class="sso-badge sso-badge-oidc">OIDC</span>{% elif app.sso_method == 'OAuth2/OIDC' %}<span class="sso-badge sso-badge-oidc">OAuth2/OIDC</span>{% elif app.sso_method == 'Password' %}<span class="sso-badge sso-badge-password">Password SSO</span>{% elif app.sso_method == 'Linked' %}<span class="sso-badge sso-badge-linked">Linked</span>{% else %}<span class="sso-badge sso-badge-other">{{ app.sso_method }}</span>{% endif %}{% endif %}<a href="https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationMenuBlade/~/Overview/appId/{{ app.app_id }}" target="_blank" rel="noopener" title="Open in Entra admin center" class="entra-link">↗</a></div>
 <div class="app-id">{{ app.app_id }}<button class="copy-id-btn" onclick="event.stopPropagation(); copyAppId(this, '{{ app.app_id }}')" title="Copy app ID">&#9112;</button></div>
 {% set _notes = (app.notes or '') | trim %}
 {% set _desc = (app.description or '') | trim %}
@@ -729,7 +729,7 @@
 {# ── Reusable macro: sign-in activity breakdown ───────────────────────────── #}
 {% macro signin_breakdown(app) %}
 <div class="signin-breakdown">
-  <span class="si-label">Sign-in Activity Breakdown{% if app.sso_method %} {% if app.is_saml_app %}<span class="saml-badge">SAML</span>{% elif app.sso_method == 'OIDC' %}<span class="sso-badge sso-badge-oidc">OIDC</span>{% elif app.sso_method == 'Password' %}<span class="sso-badge sso-badge-password">Password SSO</span>{% else %}<span class="sso-badge sso-badge-other">{{ app.sso_method }}</span>{% endif %}{% endif %}</span>
+  <span class="si-label">Sign-in Activity Breakdown{% if app.sso_method %} {% if app.is_saml_app %}<span class="saml-badge">SAML</span>{% elif app.sso_method == 'OIDC' %}<span class="sso-badge sso-badge-oidc">OIDC</span>{% elif app.sso_method == 'OAuth2/OIDC' %}<span class="sso-badge sso-badge-oidc">OAuth2/OIDC</span>{% elif app.sso_method == 'Password' %}<span class="sso-badge sso-badge-password">Password SSO</span>{% else %}<span class="sso-badge sso-badge-other">{{ app.sso_method }}</span>{% endif %}{% endif %}</span>
   {% if not app.sign_in_data_available %}
   <div style="font-size:12px; color:var(--muted); font-style:italic;">
     {%- if app.is_saml_app -%}
@@ -961,6 +961,7 @@
           <option value="">All</option>
           <option value="saml">SAML</option>
           <option value="oidc">OIDC</option>
+          <option value="oauth2/oidc">OAuth2/OIDC</option>
           <option value="password">Password SSO</option>
           <option value="linked">Linked</option>
           <option value="none">No SSO configured</option>

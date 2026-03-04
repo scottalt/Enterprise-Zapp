@@ -1483,6 +1483,44 @@ class TestSsoMethodClassification:
         assert sig.severity == "low"
         assert sig.score_contribution == 5
 
+    def test_inferred_oauth2_oidc_from_delegated_grants(self):
+        """Apps with delegated grants but no preferredSingleSignOnMode get OAuth2/OIDC."""
+        sp = {**BASE_SP, "_delegatedGrants": [{"id": "grant-1"}], "_signInActivity": {}}
+        result = analyze_app(sp)
+        assert result.sso_method == "OAuth2/OIDC"
+
+    def test_inferred_oauth2_oidc_from_reply_urls(self):
+        """Apps with replyUrls but no preferredSingleSignOnMode get OAuth2/OIDC."""
+        sp = {**BASE_SP, "replyUrls": ["https://app.example.com/callback"], "_signInActivity": {}}
+        result = analyze_app(sp)
+        assert result.sso_method == "OAuth2/OIDC"
+
+    def test_inferred_oauth2_oidc_from_scopes(self):
+        """Apps with oauth2PermissionScopes but no preferredSingleSignOnMode get OAuth2/OIDC."""
+        sp = {**BASE_SP, "oauth2PermissionScopes": [{"id": "scope-1"}], "_signInActivity": {}}
+        result = analyze_app(sp)
+        assert result.sso_method == "OAuth2/OIDC"
+
+    def test_explicit_saml_not_overridden_by_reply_urls(self):
+        """An explicit SAML app should not be reclassified even if it has replyUrls."""
+        sp = {**BASE_SP, "preferredSingleSignOnMode": "saml",
+              "replyUrls": ["https://app.example.com/callback"], "_signInActivity": {}}
+        result = analyze_app(sp)
+        assert result.sso_method == "SAML"
+
+    def test_microsoft_first_party_not_inferred(self):
+        """Microsoft first-party apps should not get inferred OAuth2/OIDC."""
+        sp = {**BASE_SP, "appOwnerOrganizationId": "f8cdef31-a31e-4b4a-93e4-5f571e91255a",
+              "_delegatedGrants": [{"id": "grant-1"}], "_signInActivity": {}}
+        result = analyze_app(sp)
+        assert result.sso_method is None
+
+    def test_no_indicators_stays_none(self):
+        """Apps with no SSO indicators remain None."""
+        sp = {**BASE_SP, "_signInActivity": {}}
+        result = analyze_app(sp)
+        assert result.sso_method is None
+
 
 # ── lastSuccessfulSignInDateTime preference ─────────────────────────────────
 

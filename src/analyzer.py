@@ -359,6 +359,17 @@ def analyze_app(
     }
     sso_method = _SSO_METHOD_LABELS.get(preferred_sso_mode.lower()) if preferred_sso_mode else None
 
+    # Infer OAuth2/OIDC when preferredSingleSignOnMode is not explicitly set.
+    # Many apps authenticate via OAuth2 / OpenID Connect without setting that
+    # field.  We detect them by the presence of delegated grants, reply URLs,
+    # or oauth2PermissionScopes — all hallmarks of an OAuth2/OIDC integration.
+    if sso_method is None and not is_microsoft_first_party:
+        _has_delegated_grants = bool(sp.get("_delegatedGrants"))
+        _has_reply_urls = bool(sp.get("replyUrls"))
+        _has_oauth2_scopes = bool(sp.get("oauth2PermissionScopes"))
+        if _has_delegated_grants or _has_reply_urls or _has_oauth2_scopes:
+            sso_method = "OAuth2/OIDC"
+
     # ── Signal: last sign-in / staleness ──────────────────────────────────
     # The beta servicePrincipalSignInActivities endpoint returns multiple
     # activity buckets.  We must check ALL of them and use the most recent
