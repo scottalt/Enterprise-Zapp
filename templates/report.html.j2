@@ -404,15 +404,23 @@
   }
   .signal-block {
     margin-bottom: 12px;
-    padding-bottom: 12px;
+    padding: 10px 12px 12px;
     border-bottom: 1px solid rgba(255,255,255,0.05);
+    border-left: 3px solid var(--border);
+    border-radius: 4px;
+    background: rgba(255,255,255,0.015);
   }
-  .signal-block:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+  .signal-block:last-child { border-bottom: none; margin-bottom: 0; }
+  .signal-block.sev-critical { border-left-color: var(--critical); background: rgba(239,68,68,0.04); }
+  .signal-block.sev-high     { border-left-color: var(--high);     background: rgba(249,115,22,0.04); }
+  .signal-block.sev-medium   { border-left-color: var(--medium);   background: rgba(234,179,8,0.04); }
+  .signal-block.sev-low      { border-left-color: var(--low);      background: rgba(34,197,94,0.04); }
   .signal-rec-text {
     font-size: 12px;
     color: #7dd3fc;
     margin-top: 5px;
     line-height: 1.5;
+    font-weight: 500;
   }
   .doc-link {
     display: inline-block; margin-left: 8px;
@@ -451,6 +459,60 @@
   .export-btn:disabled { opacity: 0.4; cursor: default; }
   .export-btn:disabled:hover { background: rgba(56,189,248,0.1); }
   .select-count { font-size: 12px; color: var(--muted); }
+
+  /* ── Section-specific colored headers ────────────────────────────────── */
+  #sec-critical .section-title { border-left-color: var(--critical); }
+  #sec-stale    .section-title { border-left-color: var(--high); }
+  #sec-creds    .section-title { border-left-color: var(--medium); }
+  #sec-orphaned .section-title { border-left-color: var(--high); }
+  #sec-priv     .section-title { border-left-color: var(--critical); }
+
+  /* ── Section count badge ───────────────────────────────────────────── */
+  .section-count {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 26px; height: 22px; border-radius: 11px;
+    font-size: 12px; font-weight: 700; padding: 0 8px;
+    margin-left: 10px; vertical-align: middle;
+  }
+  #sec-critical .section-count { background: rgba(239,68,68,0.15); color: var(--critical); }
+  #sec-stale    .section-count { background: rgba(249,115,22,0.15); color: var(--high); }
+  #sec-creds    .section-count { background: rgba(234,179,8,0.15);  color: var(--medium); }
+  #sec-orphaned .section-count { background: rgba(249,115,22,0.15); color: var(--high); }
+  #sec-priv     .section-count { background: rgba(239,68,68,0.15); color: var(--critical); }
+
+  /* ── Section urgency banner ────────────────────────────────────────── */
+  .section-banner {
+    border-radius: 8px; padding: 12px 16px; font-size: 13px;
+    margin-bottom: 16px; display: flex; align-items: center; gap: 10px;
+  }
+  .section-banner-icon { font-size: 16px; flex-shrink: 0; }
+  .section-banner-critical {
+    background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.25); color: #fca5a5;
+  }
+  .section-banner-warning {
+    background: rgba(249,115,22,0.08); border: 1px solid rgba(249,115,22,0.25); color: #fdba74;
+  }
+  .section-banner-info {
+    background: rgba(234,179,8,0.08); border: 1px solid rgba(234,179,8,0.25); color: #fde047;
+  }
+
+  /* ── Row striping for sub-sections ─────────────────────────────────── */
+  #tbl-critical tbody tr.expand-trigger:nth-of-type(4n+1),
+  #tbl-stale tbody tr.expand-trigger:nth-of-type(4n+1),
+  #tbl-creds tbody tr.expand-trigger:nth-of-type(4n+1),
+  #tbl-orphaned tbody tr.expand-trigger:nth-of-type(4n+1),
+  #tbl-priv tbody tr.expand-trigger:nth-of-type(4n+1) {
+    background: rgba(255,255,255,0.02);
+  }
+
+  /* ── Expand-all / collapse-all toggle button ───────────────────────── */
+  .expand-all-btn {
+    border: 1px solid var(--border); background: var(--surface); color: var(--muted);
+    border-radius: 6px; padding: 4px 12px; font-size: 12px; font-weight: 600;
+    cursor: pointer; transition: background 0.15s, color 0.15s;
+    user-select: none; margin-left: auto;
+  }
+  .expand-all-btn:hover { color: var(--text); border-color: var(--muted); }
 
   /* ── Print styles ────────────────────────────────────────────────────── */
   @media print {
@@ -704,7 +766,7 @@
             <td colspan="9">
               <div class="expand-content">
                 {% for sig in app.signals %}
-                <div class="signal-block">
+                <div class="signal-block sev-{{ sig.severity }}">
                   <span class="signal-chip signal-{{ sig.severity }}">{{ sig.title }}</span>
                   {% if sig.detail %}<p class="signal-detail-text">{{ sig.detail }}</p>{% endif %}
                   {% if sig.recommendation %}<p class="signal-rec-text">→ {{ sig.recommendation }}{% if sig.doc_url %}<a href="{{ sig.doc_url }}" target="_blank" rel="noopener" class="doc-link">Learn more ↗</a>{% endif %}</p>{% endif %}
@@ -742,13 +804,18 @@
   {% if critical_high_apps %}
   <div class="section" id="sec-critical">
     <div class="section-title">
-      Critical &amp; High Risk Apps
+      Critical &amp; High Risk Apps<span class="section-count">{{ critical_high_apps | length }}</span>
       <div class="section-subtitle">{{ critical_high_apps | length }} apps requiring immediate attention</div>
+    </div>
+    <div class="section-banner section-banner-critical">
+      <span class="section-banner-icon">&#9888;</span>
+      These apps have the highest risk scores and should be reviewed first. Expand each row to see individual signals and recommended actions.
     </div>
     <div class="export-toolbar">
       <button class="export-btn" onclick="exportTableCSV('tbl-critical')" disabled data-export-btn="tbl-critical">Export Selected to CSV</button>
       <button class="export-btn" onclick="exportTableXLSX('tbl-critical')" disabled data-export-btn="tbl-critical">Export Selected to XLSX</button>
       <span class="select-count" data-select-count="tbl-critical">0 selected</span>
+      <button class="expand-all-btn" onclick="toggleExpandAll('tbl-critical', this)">Expand All</button>
     </div>
     <div class="table-wrap">
       <table id="tbl-critical">
@@ -781,13 +848,13 @@
             <td data-val="{{ app.days_since_sign_in if app.days_since_sign_in is not none else 99999 }}">{{ app.last_sign_in | format_date if app.last_sign_in else '—' }}</td>
             <td data-val="{{ app.owner_count }}">{{ app.owner_count }}</td>
             <td data-val="{{ app.assignment_count }}">{{ app.assignment_count }}</td>
-            <td style="font-size: 12px; color: var(--muted); max-width: 220px;">{{ app.primary_recommendation[:120] }}{% if app.primary_recommendation | length > 120 %}…{% endif %}</td>
+            <td style="font-size: 12px; color: var(--muted); max-width: 320px; line-height: 1.5;">{{ app.primary_recommendation[:200] }}{% if app.primary_recommendation | length > 200 %}…{% endif %}</td>
           </tr>
           <tr class="expand-row" id="crit-{{ loop.index }}">
             <td colspan="8">
               <div class="expand-content">
                 {% for sig in app.signals %}
-                <div class="signal-block">
+                <div class="signal-block sev-{{ sig.severity }}">
                   <span class="signal-chip signal-{{ sig.severity }}">{{ sig.title }}</span>
                   {% if sig.detail %}<p class="signal-detail-text">{{ sig.detail }}</p>{% endif %}
                   {% if sig.recommendation %}<p class="signal-rec-text">→ {{ sig.recommendation }}{% if sig.doc_url %}<a href="{{ sig.doc_url }}" target="_blank" rel="noopener" class="doc-link">Learn more ↗</a>{% endif %}</p>{% endif %}
@@ -807,13 +874,18 @@
   {% if stale_apps %}
   <div class="section" id="sec-stale">
     <div class="section-title">
-      Stale Apps
+      Stale Apps<span class="section-count">{{ stale_apps | length }}</span>
       <div class="section-subtitle">{{ stale_apps | length }} apps with no recent sign-in activity</div>
+    </div>
+    <div class="section-banner section-banner-warning">
+      <span class="section-banner-icon">&#128337;</span>
+      These apps haven't been used recently. Consider disabling or removing them to reduce your attack surface.
     </div>
     <div class="export-toolbar">
       <button class="export-btn" onclick="exportTableCSV('tbl-stale')" disabled data-export-btn="tbl-stale">Export Selected to CSV</button>
       <button class="export-btn" onclick="exportTableXLSX('tbl-stale')" disabled data-export-btn="tbl-stale">Export Selected to XLSX</button>
       <span class="select-count" data-select-count="tbl-stale">0 selected</span>
+      <button class="expand-all-btn" onclick="toggleExpandAll('tbl-stale', this)">Expand All</button>
     </div>
     <div class="table-wrap">
       <table id="tbl-stale">
@@ -843,7 +915,7 @@
             <td colspan="7">
               <div class="expand-content">
                 {% for sig in app.signals %}
-                <div class="signal-block">
+                <div class="signal-block sev-{{ sig.severity }}">
                   <span class="signal-chip signal-{{ sig.severity }}">{{ sig.title }}</span>
                   {% if sig.detail %}<p class="signal-detail-text">{{ sig.detail }}</p>{% endif %}
                   {% if sig.recommendation %}<p class="signal-rec-text">→ {{ sig.recommendation }}{% if sig.doc_url %}<a href="{{ sig.doc_url }}" target="_blank" rel="noopener" class="doc-link">Learn more ↗</a>{% endif %}</p>{% endif %}
@@ -863,13 +935,18 @@
   {% if credential_apps %}
   <div class="section" id="sec-creds">
     <div class="section-title">
-      Credential Issues
+      Credential Issues<span class="section-count">{{ credential_apps | length }}</span>
       <div class="section-subtitle">{{ credential_apps | length }} apps with expired or near-expiry secrets/certificates</div>
+    </div>
+    <div class="section-banner section-banner-info">
+      <span class="section-banner-icon">&#128273;</span>
+      Expired credentials may indicate abandoned apps. Near-expiry credentials need rotation to prevent service disruption.
     </div>
     <div class="export-toolbar">
       <button class="export-btn" onclick="exportTableCSV('tbl-creds')" disabled data-export-btn="tbl-creds">Export Selected to CSV</button>
       <button class="export-btn" onclick="exportTableXLSX('tbl-creds')" disabled data-export-btn="tbl-creds">Export Selected to XLSX</button>
       <span class="select-count" data-select-count="tbl-creds">0 selected</span>
+      <button class="expand-all-btn" onclick="toggleExpandAll('tbl-creds', this)">Expand All</button>
     </div>
     <div class="table-wrap">
       <table id="tbl-creds">
@@ -911,7 +988,7 @@
             <td colspan="9">
               <div class="expand-content">
                 {% for sig in app.signals %}
-                <div class="signal-block">
+                <div class="signal-block sev-{{ sig.severity }}">
                   <span class="signal-chip signal-{{ sig.severity }}">{{ sig.title }}</span>
                   {% if sig.detail %}<p class="signal-detail-text">{{ sig.detail }}</p>{% endif %}
                   {% if sig.recommendation %}<p class="signal-rec-text">→ {{ sig.recommendation }}{% if sig.doc_url %}<a href="{{ sig.doc_url }}" target="_blank" rel="noopener" class="doc-link">Learn more ↗</a>{% endif %}</p>{% endif %}
@@ -931,13 +1008,18 @@
   {% if orphaned_apps %}
   <div class="section" id="sec-orphaned">
     <div class="section-title">
-      Orphaned Apps
+      Orphaned Apps<span class="section-count">{{ orphaned_apps | length }}</span>
       <div class="section-subtitle">{{ orphaned_apps | length }} apps with no valid owner</div>
+    </div>
+    <div class="section-banner section-banner-warning">
+      <span class="section-banner-icon">&#128100;</span>
+      Apps without a valid owner cannot be maintained. Assign an owner or consider removing these apps.
     </div>
     <div class="export-toolbar">
       <button class="export-btn" onclick="exportTableCSV('tbl-orphaned')" disabled data-export-btn="tbl-orphaned">Export Selected to CSV</button>
       <button class="export-btn" onclick="exportTableXLSX('tbl-orphaned')" disabled data-export-btn="tbl-orphaned">Export Selected to XLSX</button>
       <span class="select-count" data-select-count="tbl-orphaned">0 selected</span>
+      <button class="expand-all-btn" onclick="toggleExpandAll('tbl-orphaned', this)">Expand All</button>
     </div>
     <div class="table-wrap">
       <table id="tbl-orphaned">
@@ -965,7 +1047,7 @@
             <td colspan="6">
               <div class="expand-content">
                 {% for sig in app.signals %}
-                <div class="signal-block">
+                <div class="signal-block sev-{{ sig.severity }}">
                   <span class="signal-chip signal-{{ sig.severity }}">{{ sig.title }}</span>
                   {% if sig.detail %}<p class="signal-detail-text">{{ sig.detail }}</p>{% endif %}
                   {% if sig.recommendation %}<p class="signal-rec-text">→ {{ sig.recommendation }}{% if sig.doc_url %}<a href="{{ sig.doc_url }}" target="_blank" rel="noopener" class="doc-link">Learn more ↗</a>{% endif %}</p>{% endif %}
@@ -985,13 +1067,18 @@
   {% if high_privilege_apps %}
   <div class="section" id="sec-priv">
     <div class="section-title">
-      Over-Privileged Apps
+      Over-Privileged Apps<span class="section-count">{{ high_privilege_apps | length }}</span>
       <div class="section-subtitle">{{ high_privilege_apps | length }} apps with high-privilege permissions and limited or no activity</div>
+    </div>
+    <div class="section-banner section-banner-critical">
+      <span class="section-banner-icon">&#128274;</span>
+      These apps hold powerful permissions but show little or no usage. Revoke unnecessary permissions or disable these apps.
     </div>
     <div class="export-toolbar">
       <button class="export-btn" onclick="exportTableCSV('tbl-priv')" disabled data-export-btn="tbl-priv">Export Selected to CSV</button>
       <button class="export-btn" onclick="exportTableXLSX('tbl-priv')" disabled data-export-btn="tbl-priv">Export Selected to XLSX</button>
       <span class="select-count" data-select-count="tbl-priv">0 selected</span>
+      <button class="expand-all-btn" onclick="toggleExpandAll('tbl-priv', this)">Expand All</button>
     </div>
     <div class="table-wrap">
       <table id="tbl-priv">
@@ -1017,7 +1104,7 @@
             <td colspan="5">
               <div class="expand-content">
                 {% for sig in app.signals %}
-                <div class="signal-block">
+                <div class="signal-block sev-{{ sig.severity }}">
                   <span class="signal-chip signal-{{ sig.severity }}">{{ sig.title }}</span>
                   {% if sig.detail %}<p class="signal-detail-text">{{ sig.detail }}</p>{% endif %}
                   {% if sig.recommendation %}<p class="signal-rec-text">→ {{ sig.recommendation }}{% if sig.doc_url %}<a href="{{ sig.doc_url }}" target="_blank" rel="noopener" class="doc-link">Learn more ↗</a>{% endif %}</p>{% endif %}
@@ -1253,6 +1340,27 @@ function toggleRow(id, trigger) {
   const isOpen = row.classList.contains('open');
   row.classList.toggle('open', !isOpen);
   trigger.classList.toggle('open', !isOpen);
+}
+
+// ── Expand all / collapse all ────────────────────────────────────────────────
+function toggleExpandAll(tableId, btn) {
+  var table = document.getElementById(tableId);
+  if (!table) return;
+  var triggers = table.querySelectorAll('tbody tr.expand-trigger');
+  var expandRows = table.querySelectorAll('tbody tr.expand-row');
+  var anyOpen = Array.from(expandRows).some(function(r) { return r.classList.contains('open'); });
+
+  if (anyOpen) {
+    // Collapse all
+    triggers.forEach(function(t) { t.classList.remove('open'); });
+    expandRows.forEach(function(r) { r.classList.remove('open'); });
+    btn.textContent = 'Expand All';
+  } else {
+    // Expand all
+    triggers.forEach(function(t) { t.classList.add('open'); });
+    expandRows.forEach(function(r) { r.classList.add('open'); });
+    btn.textContent = 'Collapse All';
+  }
 }
 
 // ── Table sorting ────────────────────────────────────────────────────────────
