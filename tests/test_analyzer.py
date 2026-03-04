@@ -746,3 +746,202 @@ class TestMixedCredentials:
         result = analyze_app(sp)
         assert not result.has_mixed_credentials
         assert not any(s.key == "mixed_credential_types" for s in result.signals)
+
+
+# ── Staleness: multi-activity-type detection ─────────────────────────────────
+
+
+class TestStalenessMultiActivity:
+    """Staleness should use the most recent sign-in across ALL activity types."""
+
+    def _make_sp_with_sign_in(self, sign_in_activity: dict) -> dict:
+        return {
+            **BASE_SP,
+            "_signInActivity": sign_in_activity,
+        }
+
+    def test_non_interactive_prevents_stale(self):
+        """App with old interactive but recent non-interactive sign-in is NOT stale."""
+        from datetime import datetime, timezone, timedelta
+        old = (datetime.now(timezone.utc) - timedelta(days=200)).isoformat()
+        recent = (datetime.now(timezone.utc) - timedelta(days=5)).isoformat()
+        sp = self._make_sp_with_sign_in({
+            "lastSignInActivity": {
+                "lastSignInDateTime": old,
+                "lastNonInteractiveSignInDateTime": recent,
+            },
+        })
+        result = analyze_app(sp, stale_days=90)
+        assert not any(s.key == "stale" for s in result.signals)
+        assert result.days_since_sign_in is not None
+        assert result.days_since_sign_in < 90
+
+    def test_app_auth_client_prevents_stale(self):
+        """App with recent client_credentials sign-in is NOT stale."""
+        from datetime import datetime, timezone, timedelta
+        recent = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
+        sp = self._make_sp_with_sign_in({
+            "lastSignInActivity": {},
+            "applicationAuthenticationClientSignInActivity": {
+                "lastSignInDateTime": recent,
+            },
+        })
+        result = analyze_app(sp, stale_days=90)
+        assert not any(s.key == "stale" for s in result.signals)
+        assert not any(s.key == "never_signed_in" for s in result.signals)
+
+    def test_app_auth_resource_prevents_stale(self):
+        """App acting as resource with recent activity is NOT stale."""
+        from datetime import datetime, timezone, timedelta
+        recent = (datetime.now(timezone.utc) - timedelta(days=15)).isoformat()
+        sp = self._make_sp_with_sign_in({
+            "lastSignInActivity": {},
+            "applicationAuthenticationResourceSignInActivity": {
+                "lastSignInDateTime": recent,
+            },
+        })
+        result = analyze_app(sp, stale_days=90)
+        assert not any(s.key == "stale" for s in result.signals)
+
+    def test_delegated_client_prevents_stale(self):
+        """App with recent delegated client sign-in is NOT stale."""
+        from datetime import datetime, timezone, timedelta
+        recent = (datetime.now(timezone.utc) - timedelta(days=20)).isoformat()
+        sp = self._make_sp_with_sign_in({
+            "lastSignInActivity": {},
+            "delegatedClientSignInActivity": {
+                "lastSignInDateTime": recent,
+            },
+        })
+        result = analyze_app(sp, stale_days=90)
+        assert not any(s.key == "stale" for s in result.signals)
+
+    def test_all_activity_old_is_stale(self):
+        """App where ALL activity types are old IS stale."""
+        from datetime import datetime, timezone, timedelta
+        old = (datetime.now(timezone.utc) - timedelta(days=200)).isoformat()
+        sp = self._make_sp_with_sign_in({
+            "lastSignInActivity": {
+                "lastSignInDateTime": old,
+                "lastNonInteractiveSignInDateTime": old,
+            },
+            "applicationAuthenticationClientSignInActivity": {
+                "lastSignInDateTime": old,
+            },
+        })
+        result = analyze_app(sp, stale_days=90)
+        assert any(s.key == "stale" for s in result.signals)
+
+    def test_picks_most_recent_across_types(self):
+        """The most recent date across all types should win."""
+        from datetime import datetime, timezone, timedelta
+        old = (datetime.now(timezone.utc) - timedelta(days=200)).isoformat()
+        medium = (datetime.now(timezone.utc) - timedelta(days=100)).isoformat()
+        recent = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
+        sp = self._make_sp_with_sign_in({
+            "lastSignInActivity": {
+                "lastSignInDateTime": old,
+                "lastNonInteractiveSignInDateTime": medium,
+            },
+            "applicationAuthenticationClientSignInActivity": {
+                "lastSignInDateTime": recent,
+            },
+        })
+        result = analyze_app(sp, stale_days=90)
+        assert not any(s.key == "stale" for s in result.signals)
+        assert result.days_since_sign_in is not None
+        assert result.days_since_sign_in < 20
+
+
+# ── Daemon app detection ─────────────────────────────────────────────────────
+
+
+class TestDaemonApp:
+    """Apps with only application-authentication activity are daemon apps."""
+
+    def test_daemon_app_detected(self):
+        """App with only applicationAuthentication activity is flagged as daemon."""
+        from datetime import datetime, timezone, timedelta
+        recent = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
+        sp = {
+            **BASE_SP,
+            "_owners": [{"id": "owner-1", "displayName": "Test Owner", "accountEnabled": True}],
+            "_appPermissions": [],  # no user assignments
+            "_signInActivity": {
+                "lastSignInActivity": {},
+                "applicationAuthenticationClientSignInActivity": {
+                    "lastSignInDateTime": recent,
+                },
+            },
+        }
+        result = analyze_app(sp)
+        assert result.is_daemon_app
+
+    def test_daemon_app_no_assignments_suppressed(self):
+        """Daemon apps should NOT get the no_assignments signal."""
+        from datetime import datetime, timezone, timedelta
+        recent = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
+        sp = {
+            **BASE_SP,
+            "_owners": [{"id": "owner-1", "displayName": "Test Owner", "accountEnabled": True}],
+            "_appPermissions": [],  # no user assignments
+            "_signInActivity": {
+                "lastSignInActivity": {},
+                "applicationAuthenticationClientSignInActivity": {
+                    "lastSignInDateTime": recent,
+                },
+            },
+        }
+        result = analyze_app(sp)
+        assert result.is_daemon_app
+        assert not any(s.key == "no_assignments" for s in result.signals)
+
+    def test_daemon_app_no_reply_urls_suppressed(self):
+        """Daemon apps should NOT get the no_reply_urls signal."""
+        from datetime import datetime, timezone, timedelta
+        now = datetime.now(timezone.utc)
+        recent = (now - timedelta(days=10)).isoformat()
+        sp = {
+            **BASE_SP,
+            "replyUrls": [],
+            "passwordCredentials": [{
+                "keyId": "cred-1",
+                "displayName": "daemon secret",
+                "startDateTime": (now - timedelta(days=30)).isoformat(),
+                "endDateTime": (now + timedelta(days=60)).isoformat(),
+            }],
+            "_signInActivity": {
+                "lastSignInActivity": {},
+                "applicationAuthenticationClientSignInActivity": {
+                    "lastSignInDateTime": recent,
+                },
+            },
+        }
+        result = analyze_app(sp)
+        assert result.is_daemon_app
+        assert not result.has_no_reply_urls
+        assert not any(s.key == "no_reply_urls" for s in result.signals)
+
+    def test_non_daemon_app_not_flagged(self):
+        """App with delegated activity is NOT a daemon app."""
+        from datetime import datetime, timezone, timedelta
+        recent = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
+        sp = {
+            **BASE_SP,
+            "_signInActivity": {
+                "lastSignInActivity": {
+                    "lastSignInDateTime": recent,
+                },
+                "applicationAuthenticationClientSignInActivity": {
+                    "lastSignInDateTime": recent,
+                },
+            },
+        }
+        result = analyze_app(sp)
+        assert not result.is_daemon_app
+
+    def test_no_activity_not_daemon(self):
+        """App with no sign-in data at all is NOT classified as daemon."""
+        sp = {**BASE_SP, "_signInActivity": {}}
+        result = analyze_app(sp)
+        assert not result.is_daemon_app

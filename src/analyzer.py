@@ -131,6 +131,9 @@ class AppResult:
     # Mixed credential flag
     has_mixed_credentials: bool = False
 
+    # Daemon/service app flag (only application-authentication activity, no delegated)
+    is_daemon_app: bool = False
+
     # Raw data for report drill-down
     owners: list[dict] = field(default_factory=list)
     password_credentials: list[dict] = field(default_factory=list)
@@ -300,13 +303,46 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
     key_creds: list[dict] = sp.get("keyCredentials", [])
 
     # ── Signal: last sign-in / staleness ──────────────────────────────────
-    last_sign_in_raw = (
-        sign_in.get("lastSignInActivity", {}).get("lastSignInDateTime")
-        or sign_in.get("lastDelegatedSignInActivity", {}).get("lastSignInDateTime")
-        or sign_in.get("lastApplicationSignInActivity", {}).get("lastSignInDateTime")
-    )
-    last_sign_in_dt = _parse_dt(last_sign_in_raw)
+    # The beta servicePrincipalSignInActivities endpoint returns multiple
+    # activity buckets.  We must check ALL of them and use the most recent
+    # date to avoid false-positive staleness flags on apps that are actively
+    # used via non-interactive or application-only (client_credentials) flows.
+    _sign_in_candidates: list[str | None] = [
+        # Interactive sign-in
+        sign_in.get("lastSignInActivity", {}).get("lastSignInDateTime"),
+        # Non-interactive sign-in (token refreshes, background calls)
+        sign_in.get("lastSignInActivity", {}).get("lastNonInteractiveSignInDateTime"),
+        # Delegated flows (user-present, SP acting as client)
+        sign_in.get("delegatedClientSignInActivity", {}).get("lastSignInDateTime"),
+        # Delegated flows (SP acting as resource)
+        sign_in.get("delegatedResourceSignInActivity", {}).get("lastSignInDateTime"),
+        # App-only / client_credentials (SP as client)
+        sign_in.get("applicationAuthenticationClientSignInActivity", {}).get("lastSignInDateTime"),
+        # App-only / client_credentials (SP as resource)
+        sign_in.get("applicationAuthenticationResourceSignInActivity", {}).get("lastSignInDateTime"),
+    ]
+    _parsed_candidates = [(raw, _parse_dt(raw)) for raw in _sign_in_candidates if raw]
+    if _parsed_candidates:
+        # Pick the most recent sign-in across all activity types
+        last_sign_in_raw, last_sign_in_dt = max(_parsed_candidates, key=lambda t: t[1])
+    else:
+        last_sign_in_raw = None
+        last_sign_in_dt = None
     days_since = _days_since(last_sign_in_dt)
+
+    # Determine whether this app has ONLY application-authentication activity
+    # (i.e. daemon/service app using client_credentials — no user-present flows).
+    _has_app_auth_activity = bool(
+        sign_in.get("applicationAuthenticationClientSignInActivity", {}).get("lastSignInDateTime")
+        or sign_in.get("applicationAuthenticationResourceSignInActivity", {}).get("lastSignInDateTime")
+    )
+    _has_delegated_activity = bool(
+        sign_in.get("lastSignInActivity", {}).get("lastSignInDateTime")
+        or sign_in.get("lastSignInActivity", {}).get("lastNonInteractiveSignInDateTime")
+        or sign_in.get("delegatedClientSignInActivity", {}).get("lastSignInDateTime")
+        or sign_in.get("delegatedResourceSignInActivity", {}).get("lastSignInDateTime")
+    )
+    is_daemon_app = _has_app_auth_activity and not _has_delegated_activity
 
     # Microsoft first-party apps skip: staleness, ownership, no_assignments, and
     # multi_tenant signals. They are managed by Microsoft and these signals are
@@ -356,14 +392,15 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
             score += 15
 
     # ── Signal: no assignments ────────────────────────────────────────────
-    # ManagedIdentity, SocialIdp, and Microsoft first-party apps should not
-    # have mandatory user assignments — skip this signal for them.
+    # ManagedIdentity, SocialIdp, Microsoft first-party apps, and daemon/
+    # service apps (client_credentials only) do not need user assignments.
     _assignment_exempt_types = {"ManagedIdentity", "SocialIdp"}
     if (
         len(assignments) == 0
         and account_enabled
         and sp_type not in _assignment_exempt_types
         and not is_microsoft_first_party
+        and not is_daemon_app
     ):
         signals.append(Signal(
             key="no_assignments",
@@ -517,7 +554,9 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
     reply_urls: list[str] = sp.get("replyUrls", [])
     has_any_cred = len(password_creds) > 0 or len(key_creds) > 0
 
-    has_no_reply_urls = len(reply_urls) == 0 and has_any_cred
+    # Daemon/service apps using client_credentials don't need redirect URIs —
+    # suppress this signal for them to avoid false positives.
+    has_no_reply_urls = len(reply_urls) == 0 and has_any_cred and not is_daemon_app
     if has_no_reply_urls:
         signals.append(Signal(
             key="no_reply_urls",
@@ -735,6 +774,7 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
         has_implicit_grant=has_implicit_grant,
         is_multi_tenant=is_multi_tenant,
         has_mixed_credentials=has_mixed_credentials,
+        is_daemon_app=is_daemon_app,
         owners=owners,
         password_credentials=password_creds,
         key_credentials=key_creds,
