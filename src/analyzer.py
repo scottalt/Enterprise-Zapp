@@ -138,9 +138,10 @@ class AppResult:
     # Daemon/service app flag (only application-authentication activity, no delegated)
     is_daemon_app: bool = False
 
-    # SAML SSO detection
+    # SSO method detection
     is_saml_app: bool = False
     preferred_sso_mode: str | None = None
+    sso_method: str | None = None  # Human-friendly label: "SAML", "OIDC", "Password", "Linked", etc.
 
     # Sign-in activity breakdown — practitioner needs to see exactly which
     # activity types are present/absent to make informed decisions.
@@ -342,9 +343,21 @@ def analyze_app(
     password_creds: list[dict] = sp.get("passwordCredentials", [])
     key_creds: list[dict] = sp.get("keyCredentials", [])
 
-    # ── Classification: SSO mode (SAML detection) ──────────────────────────
+    # ── Classification: SSO mode ────────────────────────────────────────────
     preferred_sso_mode = sp.get("preferredSingleSignOnMode") or ""
     is_saml_app = preferred_sso_mode.lower() in ("saml", "samlsso")
+
+    # Map preferredSingleSignOnMode to a practitioner-friendly label.
+    _SSO_METHOD_LABELS = {
+        "saml": "SAML",
+        "samlsso": "SAML",
+        "oidc": "OIDC",
+        "openidconnect": "OIDC",
+        "password": "Password",
+        "linked": "Linked",
+        "notsupported": "Not Supported",
+    }
+    sso_method = _SSO_METHOD_LABELS.get(preferred_sso_mode.lower()) if preferred_sso_mode else None
 
     # ── Signal: last sign-in / staleness ──────────────────────────────────
     # The beta servicePrincipalSignInActivities endpoint returns multiple
@@ -1063,6 +1076,7 @@ def analyze_app(
         is_daemon_app=is_daemon_app,
         is_saml_app=is_saml_app,
         preferred_sso_mode=preferred_sso_mode or None,
+        sso_method=sso_method,
         last_interactive_sign_in=_interactive_raw,
         last_non_interactive_sign_in=_non_interactive_raw,
         last_delegated_client_sign_in=_delegated_client_raw,

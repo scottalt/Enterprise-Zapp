@@ -1422,6 +1422,68 @@ class TestSamlDetection:
         assert not any(s.key == "no_sign_in_data" for s in result.signals)
 
 
+# ── SSO method classification ────────────────────────────────────────────────
+
+
+class TestSsoMethodClassification:
+    """sso_method maps preferredSingleSignOnMode to human-friendly labels."""
+
+    def test_saml_maps_to_saml(self):
+        sp = {**BASE_SP, "preferredSingleSignOnMode": "saml", "_signInActivity": {}}
+        result = analyze_app(sp)
+        assert result.sso_method == "SAML"
+
+    def test_samlsso_maps_to_saml(self):
+        sp = {**BASE_SP, "preferredSingleSignOnMode": "samlsso", "_signInActivity": {}}
+        result = analyze_app(sp)
+        assert result.sso_method == "SAML"
+
+    def test_oidc_maps_to_oidc(self):
+        sp = {**BASE_SP, "preferredSingleSignOnMode": "oidc", "_signInActivity": {}}
+        result = analyze_app(sp)
+        assert result.sso_method == "OIDC"
+        assert not result.is_saml_app
+
+    def test_openidconnect_maps_to_oidc(self):
+        sp = {**BASE_SP, "preferredSingleSignOnMode": "openIdConnect", "_signInActivity": {}}
+        result = analyze_app(sp)
+        assert result.sso_method == "OIDC"
+        assert not result.is_saml_app
+
+    def test_password_maps_to_password(self):
+        sp = {**BASE_SP, "preferredSingleSignOnMode": "password", "_signInActivity": {}}
+        result = analyze_app(sp)
+        assert result.sso_method == "Password"
+
+    def test_linked_maps_to_linked(self):
+        sp = {**BASE_SP, "preferredSingleSignOnMode": "linked", "_signInActivity": {}}
+        result = analyze_app(sp)
+        assert result.sso_method == "Linked"
+
+    def test_notsupported_maps_to_not_supported(self):
+        sp = {**BASE_SP, "preferredSingleSignOnMode": "notSupported", "_signInActivity": {}}
+        result = analyze_app(sp)
+        assert result.sso_method == "Not Supported"
+
+    def test_empty_mode_returns_none(self):
+        sp = {**BASE_SP, "preferredSingleSignOnMode": "", "_signInActivity": {}}
+        result = analyze_app(sp)
+        assert result.sso_method is None
+
+    def test_missing_mode_returns_none(self):
+        sp = {**BASE_SP, "_signInActivity": {}}
+        result = analyze_app(sp)
+        assert result.sso_method is None
+
+    def test_oidc_no_sign_in_data_gets_low_not_info(self):
+        """OIDC apps should NOT get SAML special treatment for missing sign-in data."""
+        sp = {**BASE_SP, "preferredSingleSignOnMode": "oidc", "_signInActivity": {}}
+        result = analyze_app(sp)
+        sig = next(s for s in result.signals if s.key == "no_sign_in_data")
+        assert sig.severity == "low"
+        assert sig.score_contribution == 5
+
+
 # ── lastSuccessfulSignInDateTime preference ─────────────────────────────────
 
 

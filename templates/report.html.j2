@@ -216,11 +216,15 @@
     opacity: 0.6;
   }
   .entra-link:hover { opacity: 1; }
-  .saml-badge {
-    display: inline-block; background: rgba(56,189,248,0.15); color: var(--accent);
-    font-size: 9px; padding: 1px 6px; border-radius: 3px; vertical-align: middle;
-    margin-left: 6px; font-weight: 700; letter-spacing: 0.05em;
+  .saml-badge, .sso-badge {
+    display: inline-block; font-size: 9px; padding: 1px 6px; border-radius: 3px;
+    vertical-align: middle; margin-left: 6px; font-weight: 700; letter-spacing: 0.05em;
   }
+  .saml-badge { background: rgba(56,189,248,0.15); color: var(--accent); }
+  .sso-badge-oidc { background: rgba(167,139,250,0.15); color: var(--ca-accent); }
+  .sso-badge-password { background: rgba(234,179,8,0.15); color: var(--medium); }
+  .sso-badge-linked { background: rgba(34,197,94,0.15); color: var(--low); }
+  .sso-badge-other { background: rgba(155,163,181,0.15); color: var(--muted); }
 
   /* ── Recommendation box ──────────────────────────────────────────────── */
   .rec-box {
@@ -699,7 +703,7 @@
 
 {# ── Reusable macro: app name / app ID / description cell ──────────────────── #}
 {% macro app_cell(app) %}
-<div class="app-name"><button class="review-status" data-appid="{{ app.app_id | lower }}" data-status="unreviewed" onclick="event.stopPropagation(); cycleReviewStatus(this)" title="Click to mark review status">&#9675;</button>{{ app.display_name }}{% if app.is_saml_app %}<span class="saml-badge">SAML</span>{% endif %}<a href="https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationMenuBlade/~/Overview/appId/{{ app.app_id }}" target="_blank" rel="noopener" title="Open in Entra admin center" class="entra-link">↗</a></div>
+<div class="app-name"><button class="review-status" data-appid="{{ app.app_id | lower }}" data-status="unreviewed" onclick="event.stopPropagation(); cycleReviewStatus(this)" title="Click to mark review status">&#9675;</button>{{ app.display_name }}{% if app.sso_method %}{% if app.is_saml_app %}<span class="saml-badge">SAML</span>{% elif app.sso_method == 'OIDC' %}<span class="sso-badge sso-badge-oidc">OIDC</span>{% elif app.sso_method == 'Password' %}<span class="sso-badge sso-badge-password">Password SSO</span>{% elif app.sso_method == 'Linked' %}<span class="sso-badge sso-badge-linked">Linked</span>{% else %}<span class="sso-badge sso-badge-other">{{ app.sso_method }}</span>{% endif %}{% endif %}<a href="https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationMenuBlade/~/Overview/appId/{{ app.app_id }}" target="_blank" rel="noopener" title="Open in Entra admin center" class="entra-link">↗</a></div>
 <div class="app-id">{{ app.app_id }}<button class="copy-id-btn" onclick="event.stopPropagation(); copyAppId(this, '{{ app.app_id }}')" title="Copy app ID">&#9112;</button></div>
 {% set _notes = (app.notes or '') | trim %}
 {% set _desc = (app.description or '') | trim %}
@@ -725,7 +729,7 @@
 {# ── Reusable macro: sign-in activity breakdown ───────────────────────────── #}
 {% macro signin_breakdown(app) %}
 <div class="signin-breakdown">
-  <span class="si-label">Sign-in Activity Breakdown{% if app.is_saml_app %} <span style="display:inline-block;background:rgba(56,189,248,0.15);color:var(--accent);font-size:9px;padding:1px 6px;border-radius:3px;vertical-align:middle;margin-left:6px;font-weight:700;letter-spacing:0.05em;">SAML</span>{% endif %}</span>
+  <span class="si-label">Sign-in Activity Breakdown{% if app.sso_method %} {% if app.is_saml_app %}<span class="saml-badge">SAML</span>{% elif app.sso_method == 'OIDC' %}<span class="sso-badge sso-badge-oidc">OIDC</span>{% elif app.sso_method == 'Password' %}<span class="sso-badge sso-badge-password">Password SSO</span>{% else %}<span class="sso-badge sso-badge-other">{{ app.sso_method }}</span>{% endif %}{% endif %}</span>
   {% if not app.sign_in_data_available %}
   <div style="font-size:12px; color:var(--muted); font-style:italic;">
     {%- if app.is_saml_app -%}
@@ -952,11 +956,14 @@
         </select>
       </div>
       <div class="filter-group">
-        <span class="filter-label">SSO</span>
-        <select id="inv-filter-saml" onchange="filterTable()">
+        <span class="filter-label">SSO Method</span>
+        <select id="inv-filter-sso" onchange="filterTable()">
           <option value="">All</option>
-          <option value="yes">SAML apps</option>
-          <option value="no">Non-SAML</option>
+          <option value="saml">SAML</option>
+          <option value="oidc">OIDC</option>
+          <option value="password">Password SSO</option>
+          <option value="linked">Linked</option>
+          <option value="none">No SSO configured</option>
         </select>
       </div>
       <button class="filter-reset" id="inv-filter-reset" onclick="resetFilters()" style="display:none;">Reset filters</button>
@@ -999,6 +1006,7 @@
               data-has-high-privilege="{{ 'yes' if app.has_high_privilege else 'no' }}"
               data-is-microsoft="{{ 'yes' if app.is_microsoft_first_party else 'no' }}"
               data-is-saml="{{ 'yes' if app.is_saml_app else 'no' }}"
+              data-sso-method="{{ app.sso_method | lower if app.sso_method else '' }}"
               data-has-owners="{{ 'yes' if app.owner_count > 0 else 'no' }}"
               data-has-cred-issue="{{ 'yes' if (app.has_expired_secret or app.has_expired_cert or app.has_near_expiry_secret or app.has_near_expiry_cert) else 'no' }}"
               data-signal-keys="{{ app.signals | map(attribute='key') | join('|') }}"
@@ -1698,7 +1706,7 @@
           {% for app in group.apps %}
           <div class="owner-app-row">
             <div class="owner-app-name">
-              <a href="https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationMenuBlade/~/Overview/appId/{{ app.app_id }}" target="_blank" rel="noopener" title="Open in Entra admin center">{{ app.display_name }}</a>{% if app.is_saml_app %}<span class="saml-badge">SAML</span>{% endif %}
+              <a href="https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationMenuBlade/~/Overview/appId/{{ app.app_id }}" target="_blank" rel="noopener" title="Open in Entra admin center">{{ app.display_name }}</a>{% if app.sso_method %}{% if app.is_saml_app %}<span class="saml-badge">SAML</span>{% elif app.sso_method == 'OIDC' %}<span class="sso-badge sso-badge-oidc">OIDC</span>{% elif app.sso_method == 'Password' %}<span class="sso-badge sso-badge-password">Password SSO</span>{% elif app.sso_method == 'Linked' %}<span class="sso-badge sso-badge-linked">Linked</span>{% else %}<span class="sso-badge sso-badge-other">{{ app.sso_method }}</span>{% endif %}{% endif %}
               <span style="font-size:11px; color:var(--muted); margin-left:6px;">{{ app.app_id }}</span>
             </div>
             <div class="owner-app-score" style="color: var(--{{ app.risk_band }})">{{ app.risk_score }}</div>
@@ -2110,12 +2118,12 @@ function _getDropdownFilters() {
     owners:  (document.getElementById('inv-filter-owners')  || {}).value || '',
     creds:   (document.getElementById('inv-filter-creds')   || {}).value || '',
     priv:    (document.getElementById('inv-filter-priv')    || {}).value || '',
-    saml:    (document.getElementById('inv-filter-saml')    || {}).value || '',
+    sso:     (document.getElementById('inv-filter-sso')     || {}).value || '',
   };
 }
 
 function _hasActiveDropdown(df) {
-  return df.enabled || df.spType || df.owners || df.creds || df.priv || df.saml;
+  return df.enabled || df.spType || df.owners || df.creds || df.priv || df.sso;
 }
 
 function _highlightActiveDropdowns(df) {
@@ -2125,7 +2133,7 @@ function _highlightActiveDropdowns(df) {
     'inv-filter-owners':  df.owners,
     'inv-filter-creds':   df.creds,
     'inv-filter-priv':    df.priv,
-    'inv-filter-saml':    df.saml,
+    'inv-filter-sso':     df.sso,
   };
   for (var id in ids) {
     var el = document.getElementById(id);
@@ -2138,7 +2146,7 @@ function _highlightActiveDropdowns(df) {
 }
 
 function resetFilters() {
-  ['inv-filter-enabled','inv-filter-sptype','inv-filter-owners','inv-filter-creds','inv-filter-priv','inv-filter-saml'].forEach(function(id) {
+  ['inv-filter-enabled','inv-filter-sptype','inv-filter-owners','inv-filter-creds','inv-filter-priv','inv-filter-sso'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.value = '';
   });
@@ -2172,11 +2180,11 @@ function filterTable() {
     const matchOwners  = !df.owners  || row.dataset.hasOwners === df.owners;
     const matchCreds   = !df.creds   || row.dataset.hasCredIssue === df.creds;
     const matchPriv    = !df.priv    || row.dataset.hasHighPrivilege === df.priv;
-    const matchSaml    = !df.saml    || row.dataset.isSaml === df.saml;
+    const matchSso     = !df.sso     || (df.sso === 'none' ? !row.dataset.ssoMethod : row.dataset.ssoMethod === df.sso);
 
     const show = matchSearch && matchBand && matchMicrosoft
               && matchEnabled && matchSpType && matchOwners
-              && matchCreds && matchPriv && matchSaml;
+              && matchCreds && matchPriv && matchSso;
     row.style.display = show ? '' : 'none';
 
     // Co-hide the sibling expand row so an open expand row doesn't orphan.
@@ -2608,11 +2616,11 @@ filterTable = function() {
     var matchOwners  = !df.owners  || row.dataset.hasOwners === df.owners;
     var matchCreds   = !df.creds   || row.dataset.hasCredIssue === df.creds;
     var matchPriv    = !df.priv    || row.dataset.hasHighPrivilege === df.priv;
-    var matchSaml    = !df.saml    || row.dataset.isSaml === df.saml;
+    var matchSso     = !df.sso     || (df.sso === 'none' ? !row.dataset.ssoMethod : row.dataset.ssoMethod === df.sso);
 
     var show = matchSearch && matchBand && matchMicrosoft
             && matchEnabled && matchSpType && matchOwners
-            && matchCreds && matchPriv && matchSaml;
+            && matchCreds && matchPriv && matchSso;
     row.dataset._filteredOut = show ? '0' : '1';
     if (!show) {
       row.style.display = 'none';
