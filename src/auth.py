@@ -27,21 +27,60 @@ GRAPH_SCOPES = [
 DEFAULT_CONFIG_FILE = Path(__file__).parent.parent / "enterprise_zapp_config.json"
 
 
+def _prompt_for_config(save_path: Path) -> dict:
+    """Interactively prompt for tenant_id and client_id when config file is missing."""
+    from rich.prompt import Prompt
+
+    console.print(
+        Panel(
+            "[bold yellow]Config file not found.[/bold yellow]\n\n"
+            "If the Enterprise-Zapp app registration already exists in your tenant,\n"
+            "you can enter the details manually. You can find them in the Azure Portal:\n\n"
+            "  [cyan]Azure Portal → Microsoft Entra ID → App registrations → Enterprise-Zapp[/cyan]\n\n"
+            "  • [bold]Tenant ID[/bold]  — on the app's Overview page (also called Directory ID)\n"
+            "  • [bold]Client ID[/bold]  — on the app's Overview page (also called Application ID)\n\n"
+            "If you haven't created the app registration yet, press [bold]Ctrl+C[/bold] to exit\n"
+            "and run [cyan].\\setup.ps1[/cyan] from the repository root first.",
+            title="[cyan]Manual Configuration[/cyan]",
+            border_style="cyan",
+        )
+    )
+
+    tenant_id = Prompt.ask("[bold]Tenant ID[/bold]").strip()
+    if not tenant_id:
+        console.print("[red]Tenant ID is required.[/red]")
+        sys.exit(1)
+
+    client_id = Prompt.ask("[bold]Client ID[/bold]").strip()
+    if not client_id:
+        console.print("[red]Client ID is required.[/red]")
+        sys.exit(1)
+
+    tenant_name = Prompt.ask("[bold]Tenant name[/bold] (optional, used in report filenames)", default="").strip()
+
+    config = {
+        "tenant_id": tenant_id,
+        "client_id": client_id,
+        "tenant_name": tenant_name or tenant_id,
+    }
+
+    save = Prompt.ask(
+        f"Save to [cyan]{save_path}[/cyan] so you don't have to enter this again?",
+        choices=["y", "n"],
+        default="y",
+    )
+    if save == "y":
+        save_path.write_text(json.dumps(config, indent=2), encoding="utf-8")
+        console.print(f"[green]Config saved to {save_path}[/green]")
+
+    return config
+
+
 def load_config(config_path: Path | None = None) -> dict:
     """Load client_id and tenant_id from the JSON config produced by setup.ps1."""
     path = config_path or DEFAULT_CONFIG_FILE
     if not path.exists():
-        console.print(
-            Panel(
-                "[bold red]Config file not found.[/bold red]\n\n"
-                "Run [cyan].\\setup.ps1[/cyan] from the repository root to create an app registration.\n"
-                "Requires [bold]PowerShell 7+[/bold] and a [bold]Privileged Role Administrator[/bold] account.\n\n"
-                "Or pass [cyan]--tenant[/cyan] and [cyan]--client-id[/cyan] flags directly.",
-                title="[red]Setup Required[/red]",
-                border_style="red",
-            )
-        )
-        sys.exit(1)
+        return _prompt_for_config(path)
     try:
         config = json.loads(path.read_text(encoding="utf-8-sig"))
     except json.JSONDecodeError as exc:
