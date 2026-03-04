@@ -1581,3 +1581,73 @@ class TestAnalyzeAllCaPolicies:
         raw_data = {"apps": [BASE_SP], "ca_policies": ca}
         results = analyze_all(raw_data)
         assert any(s.key == "ca_policy_target" for s in results[0].signals)
+
+
+class TestBuildOwnerGroups:
+    """Tests for the _build_owner_groups function in reporter.py."""
+
+    def test_single_owner_single_app(self):
+        from src.reporter import _build_owner_groups
+
+        result = analyze_app(BASE_SP)
+        groups = _build_owner_groups([result])
+        assert len(groups) == 1
+        assert groups[0]["owner_name"] == "Test Owner"
+        assert groups[0]["app_count"] == 1
+        assert groups[0]["apps"][0].app_id == "test-app-id"
+
+    def test_unowned_app_grouped(self):
+        from src.reporter import _build_owner_groups
+
+        sp = {**BASE_SP, "_owners": [], "_disabledOwnerIds": []}
+        result = analyze_app(sp)
+        groups = _build_owner_groups([result])
+        assert any(g["owner_name"] == "Unowned" for g in groups)
+
+    def test_unowned_group_sorted_first(self):
+        from src.reporter import _build_owner_groups
+
+        owned = analyze_app(BASE_SP)
+        unowned = analyze_app({**BASE_SP, "appId": "unowned-app", "_owners": [], "_disabledOwnerIds": []})
+        groups = _build_owner_groups([owned, unowned])
+        assert groups[0]["owner_name"] == "Unowned"
+
+    def test_multi_owner_app_appears_in_each_group(self):
+        from src.reporter import _build_owner_groups
+
+        sp = {**BASE_SP, "_owners": [
+            {"id": "owner-1", "displayName": "Alice", "accountEnabled": True},
+            {"id": "owner-2", "displayName": "Bob", "accountEnabled": True},
+        ]}
+        result = analyze_app(sp)
+        groups = _build_owner_groups([result])
+        assert len(groups) == 2
+        names = {g["owner_name"] for g in groups}
+        assert names == {"Alice", "Bob"}
+        # The app should appear in both groups
+        for g in groups:
+            assert len(g["apps"]) == 1
+
+    def test_disabled_owner_flag(self):
+        from src.reporter import _build_owner_groups
+
+        sp = {**BASE_SP, "_owners": [
+            {"id": "owner-1", "displayName": "Disabled User", "accountEnabled": False},
+        ]}
+        result = analyze_app(sp)
+        groups = _build_owner_groups([result])
+        assert groups[0]["owner_enabled"] is False
+
+    def test_groups_sorted_by_risk(self):
+        from src.reporter import _build_owner_groups
+
+        # Create a high-risk app (no owners triggers signals)
+        high_risk_sp = {**BASE_SP, "appId": "high-risk",
+                        "_owners": [{"id": "o-hr", "displayName": "HighRiskOwner", "accountEnabled": True}],
+                        "passwordCredentials": [{"endDateTime": "2020-01-01T00:00:00Z", "displayName": "old"}]}
+        low_risk_sp = {**BASE_SP, "appId": "low-risk",
+                       "_owners": [{"id": "o-lr", "displayName": "LowRiskOwner", "accountEnabled": True}]}
+        results = [analyze_app(high_risk_sp), analyze_app(low_risk_sp)]
+        groups = _build_owner_groups(results)
+        assert groups[0]["owner_name"] == "HighRiskOwner"
+        assert groups[0]["max_risk_score"] >= groups[1]["max_risk_score"]
