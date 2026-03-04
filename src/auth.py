@@ -19,7 +19,6 @@ console = Console()
 GRAPH_SCOPES = [
     "https://graph.microsoft.com/Application.Read.All",
     "https://graph.microsoft.com/Directory.Read.All",
-    "https://graph.microsoft.com/AuditLog.Read.All",
     "https://graph.microsoft.com/Reports.Read.All",
     "https://graph.microsoft.com/Policy.Read.All",
 ]
