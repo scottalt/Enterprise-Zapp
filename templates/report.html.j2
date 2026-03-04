@@ -147,13 +147,21 @@
   .expand-row.open { display: table-row; }
   .expand-content { padding: 16px 14px; }
   .expand-trigger { cursor: pointer; }
-  .expand-trigger > td:first-child { position: relative; padding-left: 26px; }
-  .expand-trigger > td:first-child::before {
+  .expand-trigger > td:first-child:not(.cb-col) { position: relative; padding-left: 26px; }
+  .expand-trigger > td:first-child:not(.cb-col)::before {
     content: '▶';
     position: absolute; left: 8px; top: 50%; transform: translateY(-50%);
     font-size: 10px; color: var(--muted);
   }
-  .expand-trigger.open > td:first-child::before { content: '▼'; }
+  .expand-trigger.open > td:first-child:not(.cb-col)::before { content: '▼'; }
+  /* Chevron for rows with a checkbox column (inventory table) */
+  .expand-trigger > td.cb-col + td { position: relative; padding-left: 26px; }
+  .expand-trigger > td.cb-col + td::before {
+    content: '▶';
+    position: absolute; left: 8px; top: 50%; transform: translateY(-50%);
+    font-size: 10px; color: var(--muted);
+  }
+  .expand-trigger.open > td.cb-col + td::before { content: '▼'; }
 
   /* ── Signal chips ────────────────────────────────────────────────────── */
   .signals { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
@@ -387,6 +395,34 @@
   /* ── Muted empty-state cell ──────────────────────────────────────────── */
   td.muted { color: var(--muted); font-style: italic; text-align: center; padding: 20px 14px; }
 
+  /* ── Row selection checkbox ──────────────────────────────────────────── */
+  .row-select-cb {
+    width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent);
+    margin: 0; vertical-align: middle;
+  }
+  thead th.cb-col, tbody td.cb-col {
+    width: 32px; min-width: 32px; max-width: 32px;
+    text-align: center; padding: 10px 6px;
+  }
+  thead th.cb-col { cursor: default; }
+  thead th.cb-col::after { content: ''; }
+
+  /* ── Export toolbar ────────────────────────────────────────────────── */
+  .export-toolbar {
+    display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+  .export-btn {
+    border: 1px solid var(--accent); background: rgba(56,189,248,0.1); color: var(--accent);
+    border-radius: 8px; padding: 6px 16px; font-size: 12px; font-weight: 600;
+    cursor: pointer; transition: background 0.15s, color 0.15s;
+    user-select: none;
+  }
+  .export-btn:hover { background: rgba(56,189,248,0.25); }
+  .export-btn:disabled { opacity: 0.4; cursor: default; }
+  .export-btn:disabled:hover { background: rgba(56,189,248,0.1); }
+  .select-count { font-size: 12px; color: var(--muted); }
+
   /* ── Print styles ────────────────────────────────────────────────────── */
   @media print {
     .sticky-nav { display: none; }
@@ -395,6 +431,8 @@
     .brand-logo { -webkit-text-fill-color: #4f46e5; }
     .surface, .surface2 { background: #f8fafc; }
     .filter-bar { display: none; }
+    .export-toolbar { display: none; }
+    .cb-col { display: none; }
   }
 </style>
 </head>
@@ -566,23 +604,47 @@
     <div class="filter-bar">
       <input type="text" id="inv-search" placeholder="Search by name or app ID..." oninput="filterTable()">
     </div>
+    <div class="export-toolbar" id="export-toolbar">
+      <button class="export-btn" id="btn-export-csv" onclick="exportSelectedCSV()" disabled>Export Selected to CSV</button>
+      <button class="export-btn" id="btn-export-xlsx" onclick="exportSelectedXLSX()" disabled>Export Selected to XLSX</button>
+      <span class="select-count" id="select-count">0 selected</span>
+    </div>
     <div class="table-wrap">
       <table id="tbl-inventory">
         <thead>
           <tr>
-            <th onclick="sortTable('tbl-inventory', 0)">App Name</th>
-            <th onclick="sortTable('tbl-inventory', 1)">Risk Score</th>
-            <th onclick="sortTable('tbl-inventory', 2)">Risk Band</th>
-            <th onclick="sortTable('tbl-inventory', 3)">Last Sign-In</th>
-            <th onclick="sortTable('tbl-inventory', 4)">Owners</th>
-            <th onclick="sortTable('tbl-inventory', 5)">Assigned</th>
-            <th onclick="sortTable('tbl-inventory', 6)">Enabled</th>
+            <th class="cb-col"><input type="checkbox" class="row-select-cb" id="select-all-cb" onclick="toggleSelectAll(this)" title="Select all visible rows"></th>
+            <th onclick="sortTable('tbl-inventory', 1)">App Name</th>
+            <th onclick="sortTable('tbl-inventory', 2)">Risk Score</th>
+            <th onclick="sortTable('tbl-inventory', 3)">Risk Band</th>
+            <th onclick="sortTable('tbl-inventory', 4)">Last Sign-In</th>
+            <th onclick="sortTable('tbl-inventory', 5)">Owners</th>
+            <th onclick="sortTable('tbl-inventory', 6)">Assigned</th>
+            <th onclick="sortTable('tbl-inventory', 7)">Enabled</th>
             <th>Signals</th>
           </tr>
         </thead>
         <tbody>
           {% for app in all_apps %}
-          <tr class="expand-trigger" data-band="{{ app.risk_band }}" data-name="{{ app.display_name | lower }}" data-appid="{{ app.app_id | lower }}" data-microsoft="{{ 'true' if app.is_microsoft_first_party else 'false' }}" data-artifact="{{ 'true' if app.is_tool_artifact else 'false' }}" onclick="toggleRow('inv-{{ loop.index }}', this)">
+          <tr class="expand-trigger" data-band="{{ app.risk_band }}" data-name="{{ app.display_name | lower }}" data-appid="{{ app.app_id | lower }}" data-microsoft="{{ 'true' if app.is_microsoft_first_party else 'false' }}" data-artifact="{{ 'true' if app.is_tool_artifact else 'false' }}" onclick="toggleRow('inv-{{ loop.index }}', this)"
+              data-risk-score="{{ app.risk_score }}"
+              data-last-signin="{{ app.last_sign_in | format_date if app.last_sign_in else '' }}"
+              data-days-since="{{ app.days_since_sign_in if app.days_since_sign_in is not none else '' }}"
+              data-owner-count="{{ app.owner_count }}"
+              data-assignment-count="{{ app.assignment_count }}"
+              data-account-enabled="{{ 'yes' if app.account_enabled else 'no' }}"
+              data-sp-type="{{ app.sp_type }}"
+              data-created-at="{{ app.created_datetime or '' }}"
+              data-has-expired-secret="{{ 'yes' if app.has_expired_secret else 'no' }}"
+              data-has-expired-cert="{{ 'yes' if app.has_expired_cert else 'no' }}"
+              data-has-near-expiry-secret="{{ 'yes' if app.has_near_expiry_secret else 'no' }}"
+              data-has-near-expiry-cert="{{ 'yes' if app.has_near_expiry_cert else 'no' }}"
+              data-has-high-privilege="{{ 'yes' if app.has_high_privilege else 'no' }}"
+              data-is-microsoft="{{ 'yes' if app.is_microsoft_first_party else 'no' }}"
+              data-signal-keys="{{ app.signals | map(attribute='key') | join('|') }}"
+              data-signal-count="{{ app.signals | length }}"
+              data-primary-rec="{{ app.primary_recommendation | e }}">
+            <td class="cb-col" onclick="event.stopPropagation()"><input type="checkbox" class="row-select-cb" onchange="updateSelectCount()"></td>
             <td>{{ app_cell(app) }}</td>
             <td data-val="{{ app.risk_score }}">
               <div class="score-bar-wrap">
@@ -611,7 +673,7 @@
             </td>
           </tr>
           <tr class="expand-row" id="inv-{{ loop.index }}">
-            <td colspan="8">
+            <td colspan="9">
               <div class="expand-content">
                 {% for sig in app.signals %}
                 <div class="signal-block">
@@ -1258,6 +1320,151 @@ function filterTable() {
 
 // Init counter
 filterTable();
+
+// ── Row selection & export ───────────────────────────────────────────────────
+function updateSelectCount() {
+  var checked = document.querySelectorAll('#tbl-inventory tbody tr:not(.expand-row) .row-select-cb:checked').length;
+  document.getElementById('select-count').textContent = checked + ' selected';
+  document.getElementById('btn-export-csv').disabled = checked === 0;
+  document.getElementById('btn-export-xlsx').disabled = checked === 0;
+
+  // Sync the select-all checkbox
+  var visibleCbs = getVisibleCheckboxes();
+  var allCb = document.getElementById('select-all-cb');
+  var visibleChecked = visibleCbs.filter(function(cb) { return cb.checked; }).length;
+  allCb.checked = visibleCbs.length > 0 && visibleChecked === visibleCbs.length;
+  allCb.indeterminate = visibleChecked > 0 && visibleChecked < visibleCbs.length;
+}
+
+function getVisibleCheckboxes() {
+  var cbs = [];
+  document.querySelectorAll('#tbl-inventory tbody tr:not(.expand-row)').forEach(function(row) {
+    if (row.style.display !== 'none') {
+      var cb = row.querySelector('.row-select-cb');
+      if (cb) cbs.push(cb);
+    }
+  });
+  return cbs;
+}
+
+function toggleSelectAll(masterCb) {
+  var cbs = getVisibleCheckboxes();
+  cbs.forEach(function(cb) { cb.checked = masterCb.checked; });
+  updateSelectCount();
+}
+
+function csvSafe(val) {
+  if (!val) return val;
+  var s = String(val);
+  if (s[0] === '=' || s[0] === '+' || s[0] === '-' || s[0] === '@' || s[0] === '\t' || s[0] === '\r') {
+    s = "'" + s;
+  }
+  // Escape quotes and wrap if contains comma/quote/newline
+  if (s.indexOf('"') !== -1 || s.indexOf(',') !== -1 || s.indexOf('\n') !== -1) {
+    s = '"' + s.replace(/"/g, '""') + '"';
+  }
+  return s;
+}
+
+function getSelectedRows() {
+  var rows = [];
+  document.querySelectorAll('#tbl-inventory tbody tr:not(.expand-row)').forEach(function(row) {
+    var cb = row.querySelector('.row-select-cb');
+    if (cb && cb.checked) rows.push(row);
+  });
+  return rows;
+}
+
+function buildExportData() {
+  var headers = [
+    'app_name', 'app_id', 'risk_score', 'risk_band', 'last_sign_in',
+    'days_since_sign_in', 'owner_count', 'assignment_count', 'account_enabled',
+    'sp_type', 'created_at', 'has_expired_secret', 'has_expired_cert',
+    'has_near_expiry_secret', 'has_near_expiry_cert', 'has_high_privilege',
+    'is_microsoft_first_party', 'signal_keys', 'signal_count', 'primary_recommendation'
+  ];
+  var rows = getSelectedRows();
+  var data = rows.map(function(row) {
+    return {
+      app_name:                row.querySelector('.app-name') ? row.querySelector('.app-name').textContent.replace(/↗/g,'').trim() : '',
+      app_id:                  row.dataset.appid || '',
+      risk_score:              row.dataset.riskScore || '',
+      risk_band:               row.dataset.band || '',
+      last_sign_in:            row.dataset.lastSignin || '',
+      days_since_sign_in:      row.dataset.daysSince || '',
+      owner_count:             row.dataset.ownerCount || '',
+      assignment_count:        row.dataset.assignmentCount || '',
+      account_enabled:         row.dataset.accountEnabled || '',
+      sp_type:                 row.dataset.spType || '',
+      created_at:              row.dataset.createdAt || '',
+      has_expired_secret:      row.dataset.hasExpiredSecret || '',
+      has_expired_cert:        row.dataset.hasExpiredCert || '',
+      has_near_expiry_secret:  row.dataset.hasNearExpirySecret || '',
+      has_near_expiry_cert:    row.dataset.hasNearExpiryCert || '',
+      has_high_privilege:      row.dataset.hasHighPrivilege || '',
+      is_microsoft_first_party:row.dataset.isMicrosoft || '',
+      signal_keys:             row.dataset.signalKeys || '',
+      signal_count:            row.dataset.signalCount || '',
+      primary_recommendation:  row.dataset.primaryRec || ''
+    };
+  });
+  return { headers: headers, data: data };
+}
+
+function exportSelectedCSV() {
+  var exp = buildExportData();
+  if (exp.data.length === 0) return;
+  var csvLines = [exp.headers.join(',')];
+  exp.data.forEach(function(row) {
+    csvLines.push(exp.headers.map(function(h) { return csvSafe(row[h]); }).join(','));
+  });
+  var blob = new Blob([csvLines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  downloadBlob(blob, 'enterprise_zapp_selected.csv');
+}
+
+function exportSelectedXLSX() {
+  var exp = buildExportData();
+  if (exp.data.length === 0) return;
+  // Build a minimal XLSX file using XML spreadsheet format that Excel/Sheets can open
+  var xml = '<?xml version="1.0"?>\n';
+  xml += '<?mso-application progid="Excel.Sheet"?>\n';
+  xml += '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"\n';
+  xml += ' xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">\n';
+  xml += '<Worksheet ss:Name="Selected Apps"><Table>\n';
+  // Header row
+  xml += '<Row>';
+  exp.headers.forEach(function(h) {
+    xml += '<Cell><Data ss:Type="String">' + escapeXml(h) + '</Data></Cell>';
+  });
+  xml += '</Row>\n';
+  // Data rows
+  exp.data.forEach(function(row) {
+    xml += '<Row>';
+    exp.headers.forEach(function(h) {
+      var val = row[h] || '';
+      var type = isFinite(val) && val !== '' ? 'Number' : 'String';
+      xml += '<Cell><Data ss:Type="' + type + '">' + escapeXml(val) + '</Data></Cell>';
+    });
+    xml += '</Row>\n';
+  });
+  xml += '</Table></Worksheet></Workbook>';
+  var blob = new Blob([xml], { type: 'application/vnd.ms-excel' });
+  downloadBlob(blob, 'enterprise_zapp_selected.xlsx');
+}
+
+function escapeXml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function downloadBlob(blob, filename) {
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
+}
 
 // ── Dynamic nav height (used for section scroll-margin-top) ──────────────────
 // Tables no longer rely on --nav-height for their sticky headers — they use
