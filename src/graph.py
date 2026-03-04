@@ -117,7 +117,7 @@ class GraphClient:
                     "id,appId,displayName,description,accountEnabled,servicePrincipalType,"
                     "tags,appRoles,oauth2PermissionScopes,"
                     "createdDateTime,appOwnerOrganizationId,homepage,replyUrls,notes,"
-                    "signInAudience"
+                    "signInAudience,preferredSingleSignOnMode"
                 )
             },
         )

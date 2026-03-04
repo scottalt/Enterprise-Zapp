@@ -746,3 +746,1008 @@ class TestMixedCredentials:
         result = analyze_app(sp)
         assert not result.has_mixed_credentials
         assert not any(s.key == "mixed_credential_types" for s in result.signals)
+
+
+# ── Staleness: multi-activity-type detection ─────────────────────────────────
+
+
+class TestStalenessMultiActivity:
+    """Staleness should use the most recent sign-in across ALL activity types."""
+
+    def _make_sp_with_sign_in(self, sign_in_activity: dict) -> dict:
+        return {
+            **BASE_SP,
+            "_signInActivity": sign_in_activity,
+        }
+
+    def test_non_interactive_prevents_stale(self):
+        """App with old interactive but recent non-interactive sign-in is NOT stale."""
+        from datetime import datetime, timezone, timedelta
+        old = (datetime.now(timezone.utc) - timedelta(days=200)).isoformat()
+        recent = (datetime.now(timezone.utc) - timedelta(days=5)).isoformat()
+        sp = self._make_sp_with_sign_in({
+            "lastSignInActivity": {
+                "lastSignInDateTime": old,
+                "lastNonInteractiveSignInDateTime": recent,
+            },
+        })
+        result = analyze_app(sp, stale_days=90)
+        assert not any(s.key == "stale" for s in result.signals)
+        assert result.days_since_sign_in is not None
+        assert result.days_since_sign_in < 90
+
+    def test_app_auth_client_prevents_stale(self):
+        """App with recent client_credentials sign-in is NOT stale."""
+        from datetime import datetime, timezone, timedelta
+        recent = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
+        sp = self._make_sp_with_sign_in({
+            "lastSignInActivity": {},
+            "applicationAuthenticationClientSignInActivity": {
+                "lastSignInDateTime": recent,
+            },
+        })
+        result = analyze_app(sp, stale_days=90)
+        assert not any(s.key == "stale" for s in result.signals)
+        assert not any(s.key == "never_signed_in" for s in result.signals)
+
+    def test_app_auth_resource_prevents_stale(self):
+        """App acting as resource with recent activity is NOT stale."""
+        from datetime import datetime, timezone, timedelta
+        recent = (datetime.now(timezone.utc) - timedelta(days=15)).isoformat()
+        sp = self._make_sp_with_sign_in({
+            "lastSignInActivity": {},
+            "applicationAuthenticationResourceSignInActivity": {
+                "lastSignInDateTime": recent,
+            },
+        })
+        result = analyze_app(sp, stale_days=90)
+        assert not any(s.key == "stale" for s in result.signals)
+
+    def test_delegated_client_prevents_stale(self):
+        """App with recent delegated client sign-in is NOT stale."""
+        from datetime import datetime, timezone, timedelta
+        recent = (datetime.now(timezone.utc) - timedelta(days=20)).isoformat()
+        sp = self._make_sp_with_sign_in({
+            "lastSignInActivity": {},
+            "delegatedClientSignInActivity": {
+                "lastSignInDateTime": recent,
+            },
+        })
+        result = analyze_app(sp, stale_days=90)
+        assert not any(s.key == "stale" for s in result.signals)
+
+    def test_all_activity_old_is_stale(self):
+        """App where ALL activity types are old IS stale."""
+        from datetime import datetime, timezone, timedelta
+        old = (datetime.now(timezone.utc) - timedelta(days=200)).isoformat()
+        sp = self._make_sp_with_sign_in({
+            "lastSignInActivity": {
+                "lastSignInDateTime": old,
+                "lastNonInteractiveSignInDateTime": old,
+            },
+            "applicationAuthenticationClientSignInActivity": {
+                "lastSignInDateTime": old,
+            },
+        })
+        result = analyze_app(sp, stale_days=90)
+        assert any(s.key == "stale" for s in result.signals)
+
+    def test_picks_most_recent_across_types(self):
+        """The most recent date across all types should win."""
+        from datetime import datetime, timezone, timedelta
+        old = (datetime.now(timezone.utc) - timedelta(days=200)).isoformat()
+        medium = (datetime.now(timezone.utc) - timedelta(days=100)).isoformat()
+        recent = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
+        sp = self._make_sp_with_sign_in({
+            "lastSignInActivity": {
+                "lastSignInDateTime": old,
+                "lastNonInteractiveSignInDateTime": medium,
+            },
+            "applicationAuthenticationClientSignInActivity": {
+                "lastSignInDateTime": recent,
+            },
+        })
+        result = analyze_app(sp, stale_days=90)
+        assert not any(s.key == "stale" for s in result.signals)
+        assert result.days_since_sign_in is not None
+        assert result.days_since_sign_in < 20
+
+
+# ── Daemon app detection ─────────────────────────────────────────────────────
+
+
+class TestDaemonApp:
+    """Apps with only application-authentication activity are daemon apps."""
+
+    def test_daemon_app_detected(self):
+        """App with only applicationAuthentication activity is flagged as daemon."""
+        from datetime import datetime, timezone, timedelta
+        recent = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
+        sp = {
+            **BASE_SP,
+            "_owners": [{"id": "owner-1", "displayName": "Test Owner", "accountEnabled": True}],
+            "_appPermissions": [],  # no user assignments
+            "_signInActivity": {
+                "lastSignInActivity": {},
+                "applicationAuthenticationClientSignInActivity": {
+                    "lastSignInDateTime": recent,
+                },
+            },
+        }
+        result = analyze_app(sp)
+        assert result.is_daemon_app
+
+    def test_daemon_app_no_assignments_suppressed(self):
+        """Daemon apps should NOT get the no_assignments signal."""
+        from datetime import datetime, timezone, timedelta
+        recent = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
+        sp = {
+            **BASE_SP,
+            "_owners": [{"id": "owner-1", "displayName": "Test Owner", "accountEnabled": True}],
+            "_appPermissions": [],  # no user assignments
+            "_signInActivity": {
+                "lastSignInActivity": {},
+                "applicationAuthenticationClientSignInActivity": {
+                    "lastSignInDateTime": recent,
+                },
+            },
+        }
+        result = analyze_app(sp)
+        assert result.is_daemon_app
+        assert not any(s.key == "no_assignments" for s in result.signals)
+
+    def test_daemon_app_no_reply_urls_suppressed(self):
+        """Daemon apps should NOT get the no_reply_urls signal."""
+        from datetime import datetime, timezone, timedelta
+        now = datetime.now(timezone.utc)
+        recent = (now - timedelta(days=10)).isoformat()
+        sp = {
+            **BASE_SP,
+            "replyUrls": [],
+            "passwordCredentials": [{
+                "keyId": "cred-1",
+                "displayName": "daemon secret",
+                "startDateTime": (now - timedelta(days=30)).isoformat(),
+                "endDateTime": (now + timedelta(days=60)).isoformat(),
+            }],
+            "_signInActivity": {
+                "lastSignInActivity": {},
+                "applicationAuthenticationClientSignInActivity": {
+                    "lastSignInDateTime": recent,
+                },
+            },
+        }
+        result = analyze_app(sp)
+        assert result.is_daemon_app
+        assert not result.has_no_reply_urls
+        assert not any(s.key == "no_reply_urls" for s in result.signals)
+
+    def test_non_daemon_app_not_flagged(self):
+        """App with delegated activity is NOT a daemon app."""
+        from datetime import datetime, timezone, timedelta
+        recent = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
+        sp = {
+            **BASE_SP,
+            "_signInActivity": {
+                "lastSignInActivity": {
+                    "lastSignInDateTime": recent,
+                },
+                "applicationAuthenticationClientSignInActivity": {
+                    "lastSignInDateTime": recent,
+                },
+            },
+        }
+        result = analyze_app(sp)
+        assert not result.is_daemon_app
+
+    def test_no_activity_not_daemon(self):
+        """App with no sign-in data at all is NOT classified as daemon."""
+        sp = {**BASE_SP, "_signInActivity": {}}
+        result = analyze_app(sp)
+        assert not result.is_daemon_app
+
+
+# ── Tiered staleness ─────────────────────────────────────────────────────────
+
+
+class TestTieredStaleness:
+    """Staleness tiers: 90-180 medium, 180-365 high, 365+ critical."""
+
+    def _make_sp_stale(self, days_ago: int) -> dict:
+        from datetime import datetime, timezone, timedelta
+        last_signin = (datetime.now(timezone.utc) - timedelta(days=days_ago)).isoformat()
+        return {
+            **BASE_SP,
+            "_signInActivity": {
+                "lastSignInActivity": {"lastSignInDateTime": last_signin}
+            },
+        }
+
+    def test_90_to_180_is_medium(self):
+        sp = self._make_sp_stale(120)
+        result = analyze_app(sp, stale_days=90)
+        stale_sigs = [s for s in result.signals if s.key == "stale"]
+        assert len(stale_sigs) == 1
+        assert stale_sigs[0].severity == "medium"
+        assert stale_sigs[0].score_contribution == 20
+
+    def test_180_to_365_is_high(self):
+        sp = self._make_sp_stale(250)
+        result = analyze_app(sp, stale_days=90)
+        stale_sigs = [s for s in result.signals if s.key == "stale"]
+        assert len(stale_sigs) == 1
+        assert stale_sigs[0].severity == "high"
+        assert stale_sigs[0].score_contribution == 30
+
+    def test_365_plus_is_critical(self):
+        sp = self._make_sp_stale(400)
+        result = analyze_app(sp, stale_days=90)
+        stale_sigs = [s for s in result.signals if s.key == "stale"]
+        assert len(stale_sigs) == 1
+        assert stale_sigs[0].severity == "critical"
+        assert stale_sigs[0].score_contribution == 40
+
+    def test_abandoned_title_contains_abandoned(self):
+        sp = self._make_sp_stale(400)
+        result = analyze_app(sp, stale_days=90)
+        stale_sigs = [s for s in result.signals if s.key == "stale"]
+        assert "Abandoned" in stale_sigs[0].title
+
+
+# ── Creation-age-aware never_signed_in ────────────────────────────────────────
+
+
+class TestNeverSignedInGracePeriod:
+    """Apps created recently get a lower-severity never_signed_in signal."""
+
+    def test_new_app_gets_low_severity(self):
+        from datetime import datetime, timezone, timedelta
+        recent_created = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
+        sp = {
+            **BASE_SP,
+            "createdDateTime": recent_created,
+            "_signInActivity": {
+                "lastSignInActivity": {}
+            },
+        }
+        result = analyze_app(sp)
+        nsi = [s for s in result.signals if s.key == "never_signed_in"]
+        assert len(nsi) == 1
+        assert nsi[0].severity == "low"
+        assert nsi[0].score_contribution == 5
+
+    def test_old_app_gets_high_severity(self):
+        from datetime import datetime, timezone, timedelta
+        old_created = (datetime.now(timezone.utc) - timedelta(days=200)).isoformat()
+        sp = {
+            **BASE_SP,
+            "createdDateTime": old_created,
+            "_signInActivity": {
+                "lastSignInActivity": {}
+            },
+        }
+        result = analyze_app(sp)
+        nsi = [s for s in result.signals if s.key == "never_signed_in"]
+        assert len(nsi) == 1
+        assert nsi[0].severity == "high"
+        assert nsi[0].score_contribution == 35
+
+    def test_grace_period_boundary(self):
+        from datetime import datetime, timezone, timedelta
+        # Exactly at grace period (30 days) — still within grace
+        boundary = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+        sp = {
+            **BASE_SP,
+            "createdDateTime": boundary,
+            "_signInActivity": {
+                "lastSignInActivity": {}
+            },
+        }
+        result = analyze_app(sp)
+        nsi = [s for s in result.signals if s.key == "never_signed_in"]
+        assert nsi[0].severity == "low"
+
+
+# ── Expired creds on stale apps ───────────────────────────────────────────────
+
+
+class TestExpiredCredsOnStaleApps:
+    """Expired credentials on stale/abandoned apps are downgraded to info."""
+
+    def test_expired_secret_on_stale_app_is_info(self):
+        from datetime import datetime, timezone, timedelta
+        old_signin = (datetime.now(timezone.utc) - timedelta(days=200)).isoformat()
+        sp = {
+            **BASE_SP,
+            "_signInActivity": {
+                "lastSignInActivity": {"lastSignInDateTime": old_signin}
+            },
+            "passwordCredentials": [{
+                "keyId": "old-key",
+                "displayName": "expired secret",
+                "startDateTime": (datetime.now(timezone.utc) - timedelta(days=400)).isoformat(),
+                "endDateTime": (datetime.now(timezone.utc) - timedelta(days=30)).isoformat(),
+            }],
+        }
+        result = analyze_app(sp, stale_days=90)
+        expired = [s for s in result.signals if s.key == "expired_secret"]
+        assert len(expired) == 1
+        assert expired[0].severity == "info"
+        assert expired[0].score_contribution == 0
+
+    def test_expired_secret_on_active_app_is_critical(self):
+        from datetime import datetime, timezone, timedelta
+        recent_signin = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
+        sp = {
+            **BASE_SP,
+            "_signInActivity": {
+                "lastSignInActivity": {"lastSignInDateTime": recent_signin}
+            },
+            "passwordCredentials": [{
+                "keyId": "old-key",
+                "displayName": "expired secret",
+                "startDateTime": (datetime.now(timezone.utc) - timedelta(days=400)).isoformat(),
+                "endDateTime": (datetime.now(timezone.utc) - timedelta(days=30)).isoformat(),
+            }],
+        }
+        result = analyze_app(sp, stale_days=90)
+        expired = [s for s in result.signals if s.key == "expired_secret"]
+        assert len(expired) == 1
+        assert expired[0].severity == "critical"
+        assert expired[0].score_contribution == 25
+
+    def test_expired_cert_on_never_signed_in_is_info(self):
+        from datetime import datetime, timezone, timedelta
+        sp = {
+            **BASE_SP,
+            "createdDateTime": (datetime.now(timezone.utc) - timedelta(days=200)).isoformat(),
+            "_signInActivity": {
+                "lastSignInActivity": {}
+            },
+            "keyCredentials": [{
+                "keyId": "old-cert",
+                "displayName": "expired cert",
+                "startDateTime": (datetime.now(timezone.utc) - timedelta(days=400)).isoformat(),
+                "endDateTime": (datetime.now(timezone.utc) - timedelta(days=30)).isoformat(),
+            }],
+        }
+        result = analyze_app(sp, stale_days=90)
+        expired = [s for s in result.signals if s.key == "expired_cert"]
+        assert len(expired) == 1
+        assert expired[0].severity == "info"
+
+
+# ── Credential sprawl ────────────────────────────────────────────────────────
+
+
+class TestCredentialSprawl:
+    """Apps with 3+ client secrets get a credential_sprawl signal."""
+
+    def _make_secret(self, key_id: str) -> dict:
+        from datetime import datetime, timezone, timedelta
+        now = datetime.now(timezone.utc)
+        return {
+            "keyId": key_id,
+            "displayName": f"secret-{key_id}",
+            "startDateTime": (now - timedelta(days=30)).isoformat(),
+            "endDateTime": (now + timedelta(days=60)).isoformat(),
+        }
+
+    def test_three_secrets_triggers_sprawl(self):
+        sp = {
+            **BASE_SP,
+            "replyUrls": ["https://app.contoso.com/callback"],
+            "passwordCredentials": [
+                self._make_secret("1"),
+                self._make_secret("2"),
+                self._make_secret("3"),
+            ],
+        }
+        result = analyze_app(sp)
+        assert result.credential_count == 3
+        sprawl = [s for s in result.signals if s.key == "credential_sprawl"]
+        assert len(sprawl) == 1
+        assert sprawl[0].severity == "medium"
+
+    def test_two_secrets_no_sprawl(self):
+        sp = {
+            **BASE_SP,
+            "replyUrls": ["https://app.contoso.com/callback"],
+            "passwordCredentials": [
+                self._make_secret("1"),
+                self._make_secret("2"),
+            ],
+        }
+        result = analyze_app(sp)
+        assert not any(s.key == "credential_sprawl" for s in result.signals)
+
+    def test_credential_count_includes_certs(self):
+        from datetime import datetime, timezone, timedelta
+        now = datetime.now(timezone.utc)
+        sp = {
+            **BASE_SP,
+            "replyUrls": ["https://app.contoso.com/callback"],
+            "passwordCredentials": [self._make_secret("1")],
+            "keyCredentials": [{
+                "keyId": "cert-1",
+                "displayName": "cert",
+                "startDateTime": (now - timedelta(days=30)).isoformat(),
+                "endDateTime": (now + timedelta(days=60)).isoformat(),
+            }],
+        }
+        result = analyze_app(sp)
+        assert result.credential_count == 2
+
+
+# ── Action tags ───────────────────────────────────────────────────────────────
+
+
+class TestActionTags:
+    """Action tags tell the practitioner what to DO."""
+
+    def test_abandoned_app_gets_delete_tag(self):
+        from datetime import datetime, timezone, timedelta
+        old = (datetime.now(timezone.utc) - timedelta(days=400)).isoformat()
+        sp = {
+            **BASE_SP,
+            "_signInActivity": {
+                "lastSignInActivity": {"lastSignInDateTime": old}
+            },
+        }
+        result = analyze_app(sp, stale_days=90)
+        assert "delete" in result.action_tags
+
+    def test_never_signed_in_gets_delete_tag(self):
+        from datetime import datetime, timezone, timedelta
+        sp = {
+            **BASE_SP,
+            "createdDateTime": (datetime.now(timezone.utc) - timedelta(days=200)).isoformat(),
+            "_signInActivity": {
+                "lastSignInActivity": {}
+            },
+        }
+        result = analyze_app(sp)
+        assert "delete" in result.action_tags
+
+    def test_disabled_sp_gets_delete_tag(self):
+        sp = {**BASE_SP, "accountEnabled": False}
+        result = analyze_app(sp)
+        assert "delete" in result.action_tags
+
+    def test_active_app_expired_cred_gets_rotate_tag(self):
+        from datetime import datetime, timezone, timedelta
+        now = datetime.now(timezone.utc)
+        recent = (now - timedelta(days=10)).isoformat()
+        sp = {
+            **BASE_SP,
+            "_signInActivity": {
+                "lastSignInActivity": {"lastSignInDateTime": recent}
+            },
+            "passwordCredentials": [{
+                "keyId": "old-key",
+                "displayName": "expired",
+                "startDateTime": (now - timedelta(days=400)).isoformat(),
+                "endDateTime": (now - timedelta(days=30)).isoformat(),
+            }],
+        }
+        result = analyze_app(sp, stale_days=90)
+        assert "rotate" in result.action_tags
+        assert "delete" not in result.action_tags
+
+    def test_stale_app_expired_cred_gets_delete_not_rotate(self):
+        """Stale app with expired creds should get 'delete', not 'rotate'."""
+        from datetime import datetime, timezone, timedelta
+        now = datetime.now(timezone.utc)
+        old = (now - timedelta(days=400)).isoformat()
+        sp = {
+            **BASE_SP,
+            "_signInActivity": {
+                "lastSignInActivity": {"lastSignInDateTime": old}
+            },
+            "passwordCredentials": [{
+                "keyId": "old-key",
+                "displayName": "expired",
+                "startDateTime": (now - timedelta(days=500)).isoformat(),
+                "endDateTime": (now - timedelta(days=30)).isoformat(),
+            }],
+        }
+        result = analyze_app(sp, stale_days=90)
+        assert "delete" in result.action_tags
+        # expired_secret on stale app is info/0-score, so no rotate tag
+        # but the signal key is still there
+        assert "rotate" not in result.action_tags
+
+    def test_no_owners_gets_assign_owner_tag(self):
+        sp = {**BASE_SP, "_owners": [], "_disabledOwnerIds": []}
+        result = analyze_app(sp)
+        assert "assign_owner" in result.action_tags
+
+    def test_implicit_grant_gets_review_config_tag(self):
+        sp = {**BASE_SP, "oauth2AllowImplicitFlow": True}
+        result = analyze_app(sp)
+        assert "review_config" in result.action_tags
+
+    def test_clean_app_has_no_action_tags(self):
+        result = analyze_app(BASE_SP)
+        assert result.action_tags == []
+
+
+# ── Sign-in activity breakdown and no_sign_in_data ───────────────────────
+
+
+class TestNoSignInData:
+    """When Graph returns no sign-in record (empty dict), flag it."""
+
+    def test_no_sign_in_data_signal(self):
+        sp = {**BASE_SP, "_signInActivity": {}}
+        result = analyze_app(sp)
+        assert any(s.key == "no_sign_in_data" for s in result.signals)
+        assert not result.sign_in_data_available
+
+    def test_no_sign_in_data_score(self):
+        sp = {**BASE_SP, "_signInActivity": {}}
+        result = analyze_app(sp)
+        sig = next(s for s in result.signals if s.key == "no_sign_in_data")
+        assert sig.score_contribution == 5
+        assert sig.severity == "low"
+
+    def test_microsoft_first_party_skips_no_sign_in_data(self):
+        sp = {
+            **BASE_SP,
+            "_signInActivity": {},
+            "appOwnerOrganizationId": "f8cdef31-a31e-4b4a-93e4-5f571e91255a",
+        }
+        result = analyze_app(sp)
+        assert not any(s.key == "no_sign_in_data" for s in result.signals)
+
+    def test_sign_in_record_present_does_not_fire(self):
+        """When Graph returns a sign-in record (even with empty activity), no_sign_in_data should not fire."""
+        sp = {
+            **BASE_SP,
+            "_signInActivity": {"lastSignInActivity": {}},
+        }
+        result = analyze_app(sp)
+        assert result.sign_in_data_available
+        assert not any(s.key == "no_sign_in_data" for s in result.signals)
+
+
+class TestSignInBreakdown:
+    """Verify individual sign-in type fields are populated correctly."""
+
+    def test_interactive_only(self):
+        from datetime import datetime, timezone, timedelta
+        recent = (datetime.now(timezone.utc) - timedelta(days=5)).isoformat()
+        sp = {
+            **BASE_SP,
+            "_signInActivity": {
+                "lastSignInActivity": {"lastSignInDateTime": recent},
+            },
+        }
+        result = analyze_app(sp)
+        assert result.last_interactive_sign_in == recent
+        assert result.last_non_interactive_sign_in is None
+        assert result.last_app_auth_client_sign_in is None
+        assert not result.is_daemon_app
+
+    def test_stale_detail_includes_breakdown(self):
+        from datetime import datetime, timezone, timedelta
+        old = (datetime.now(timezone.utc) - timedelta(days=200)).isoformat()
+        sp = {
+            **BASE_SP,
+            "_signInActivity": {
+                "lastSignInActivity": {"lastSignInDateTime": old},
+            },
+        }
+        result = analyze_app(sp)
+        stale_sig = next((s for s in result.signals if s.key == "stale"), None)
+        assert stale_sig is not None
+        assert "Activity breakdown:" in stale_sig.detail
+        assert "Interactive:" in stale_sig.detail
+        assert "Non-interactive: none" in stale_sig.detail
+
+    def test_never_signed_in_detail_includes_breakdown(self):
+        sp = {
+            **BASE_SP,
+            "_signInActivity": {"lastSignInActivity": {}},
+        }
+        result = analyze_app(sp)
+        sig = next((s for s in result.signals if s.key == "never_signed_in"), None)
+        assert sig is not None
+        assert "Activity breakdown:" in sig.detail
+        assert "Interactive: none" in sig.detail
+        assert "App-only (client): none" in sig.detail
+
+
+# ── SAML app detection ──────────────────────────────────────────────────────
+
+
+class TestSamlDetection:
+    """Apps with preferredSingleSignOnMode=saml are detected and handled specially."""
+
+    def test_saml_app_detected(self):
+        sp = {**BASE_SP, "preferredSingleSignOnMode": "saml", "_signInActivity": {}}
+        result = analyze_app(sp)
+        assert result.is_saml_app
+        assert result.preferred_sso_mode == "saml"
+
+    def test_saml_app_no_sign_in_data_is_info(self):
+        """SAML app with no sign-in data gets info severity, not low."""
+        sp = {**BASE_SP, "preferredSingleSignOnMode": "saml", "_signInActivity": {}}
+        result = analyze_app(sp)
+        sig = next(s for s in result.signals if s.key == "no_sign_in_data")
+        assert sig.severity == "info"
+        assert sig.score_contribution == 0
+        assert "SAML" in sig.title
+
+    def test_saml_detail_mentions_entra_logs(self):
+        """SAML no_sign_in_data detail should mention checking Entra ID logs."""
+        sp = {**BASE_SP, "preferredSingleSignOnMode": "saml", "_signInActivity": {}}
+        result = analyze_app(sp)
+        sig = next(s for s in result.signals if s.key == "no_sign_in_data")
+        assert "Entra ID sign-in logs" in sig.detail
+
+    def test_non_saml_app_no_sign_in_data_is_low(self):
+        """Non-SAML app with no sign-in data still gets low severity."""
+        sp = {**BASE_SP, "_signInActivity": {}}
+        result = analyze_app(sp)
+        sig = next(s for s in result.signals if s.key == "no_sign_in_data")
+        assert sig.severity == "low"
+        assert sig.score_contribution == 5
+
+    def test_saml_sso_variant_detected(self):
+        """preferredSingleSignOnMode=samlsso is also detected."""
+        sp = {**BASE_SP, "preferredSingleSignOnMode": "samlsso", "_signInActivity": {}}
+        result = analyze_app(sp)
+        assert result.is_saml_app
+
+    def test_non_saml_mode_not_flagged(self):
+        """preferredSingleSignOnMode=password is NOT SAML."""
+        sp = {**BASE_SP, "preferredSingleSignOnMode": "password", "_signInActivity": {}}
+        result = analyze_app(sp)
+        assert not result.is_saml_app
+
+    def test_saml_app_with_sign_in_data_no_special_handling(self):
+        """SAML app that HAS sign-in data doesn't get no_sign_in_data signal."""
+        from datetime import datetime, timezone, timedelta
+        recent = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
+        sp = {
+            **BASE_SP,
+            "preferredSingleSignOnMode": "saml",
+            "_signInActivity": {
+                "lastSignInActivity": {"lastSignInDateTime": recent},
+            },
+        }
+        result = analyze_app(sp)
+        assert result.is_saml_app
+        assert not any(s.key == "no_sign_in_data" for s in result.signals)
+
+
+# ── SSO method classification ────────────────────────────────────────────────
+
+
+class TestSsoMethodClassification:
+    """sso_method maps preferredSingleSignOnMode to human-friendly labels."""
+
+    def test_saml_maps_to_saml(self):
+        sp = {**BASE_SP, "preferredSingleSignOnMode": "saml", "_signInActivity": {}}
+        result = analyze_app(sp)
+        assert result.sso_method == "SAML"
+
+    def test_samlsso_maps_to_saml(self):
+        sp = {**BASE_SP, "preferredSingleSignOnMode": "samlsso", "_signInActivity": {}}
+        result = analyze_app(sp)
+        assert result.sso_method == "SAML"
+
+    def test_oidc_maps_to_oidc(self):
+        sp = {**BASE_SP, "preferredSingleSignOnMode": "oidc", "_signInActivity": {}}
+        result = analyze_app(sp)
+        assert result.sso_method == "OIDC"
+        assert not result.is_saml_app
+
+    def test_openidconnect_maps_to_oidc(self):
+        sp = {**BASE_SP, "preferredSingleSignOnMode": "openIdConnect", "_signInActivity": {}}
+        result = analyze_app(sp)
+        assert result.sso_method == "OIDC"
+        assert not result.is_saml_app
+
+    def test_password_maps_to_password(self):
+        sp = {**BASE_SP, "preferredSingleSignOnMode": "password", "_signInActivity": {}}
+        result = analyze_app(sp)
+        assert result.sso_method == "Password"
+
+    def test_linked_maps_to_linked(self):
+        sp = {**BASE_SP, "preferredSingleSignOnMode": "linked", "_signInActivity": {}}
+        result = analyze_app(sp)
+        assert result.sso_method == "Linked"
+
+    def test_notsupported_maps_to_not_supported(self):
+        sp = {**BASE_SP, "preferredSingleSignOnMode": "notSupported", "_signInActivity": {}}
+        result = analyze_app(sp)
+        assert result.sso_method == "Not Supported"
+
+    def test_empty_mode_returns_none(self):
+        sp = {**BASE_SP, "preferredSingleSignOnMode": "", "_signInActivity": {}}
+        result = analyze_app(sp)
+        assert result.sso_method is None
+
+    def test_missing_mode_returns_none(self):
+        sp = {**BASE_SP, "_signInActivity": {}}
+        result = analyze_app(sp)
+        assert result.sso_method is None
+
+    def test_oidc_no_sign_in_data_gets_low_not_info(self):
+        """OIDC apps should NOT get SAML special treatment for missing sign-in data."""
+        sp = {**BASE_SP, "preferredSingleSignOnMode": "oidc", "_signInActivity": {}}
+        result = analyze_app(sp)
+        sig = next(s for s in result.signals if s.key == "no_sign_in_data")
+        assert sig.severity == "low"
+        assert sig.score_contribution == 5
+
+    def test_inferred_oauth2_oidc_from_delegated_grants(self):
+        """Apps with delegated grants but no preferredSingleSignOnMode get OAuth2/OIDC."""
+        sp = {**BASE_SP, "_delegatedGrants": [{"id": "grant-1"}], "_signInActivity": {}}
+        result = analyze_app(sp)
+        assert result.sso_method == "OAuth2/OIDC"
+
+    def test_inferred_oauth2_oidc_from_reply_urls(self):
+        """Apps with replyUrls but no preferredSingleSignOnMode get OAuth2/OIDC."""
+        sp = {**BASE_SP, "replyUrls": ["https://app.example.com/callback"], "_signInActivity": {}}
+        result = analyze_app(sp)
+        assert result.sso_method == "OAuth2/OIDC"
+
+    def test_inferred_oauth2_oidc_from_scopes(self):
+        """Apps with oauth2PermissionScopes but no preferredSingleSignOnMode get OAuth2/OIDC."""
+        sp = {**BASE_SP, "oauth2PermissionScopes": [{"id": "scope-1"}], "_signInActivity": {}}
+        result = analyze_app(sp)
+        assert result.sso_method == "OAuth2/OIDC"
+
+    def test_explicit_saml_not_overridden_by_reply_urls(self):
+        """An explicit SAML app should not be reclassified even if it has replyUrls."""
+        sp = {**BASE_SP, "preferredSingleSignOnMode": "saml",
+              "replyUrls": ["https://app.example.com/callback"], "_signInActivity": {}}
+        result = analyze_app(sp)
+        assert result.sso_method == "SAML"
+
+    def test_microsoft_first_party_not_inferred(self):
+        """Microsoft first-party apps should not get inferred OAuth2/OIDC."""
+        sp = {**BASE_SP, "appOwnerOrganizationId": "f8cdef31-a31e-4b4a-93e4-5f571e91255a",
+              "_delegatedGrants": [{"id": "grant-1"}], "_signInActivity": {}}
+        result = analyze_app(sp)
+        assert result.sso_method is None
+
+    def test_no_indicators_stays_none(self):
+        """Apps with no SSO indicators remain None."""
+        sp = {**BASE_SP, "_signInActivity": {}}
+        result = analyze_app(sp)
+        assert result.sso_method is None
+
+
+# ── lastSuccessfulSignInDateTime preference ─────────────────────────────────
+
+
+class TestSuccessfulSignInPreference:
+    """Staleness should use lastSuccessfulSignInDateTime over lastSignInDateTime."""
+
+    def test_successful_timestamp_preferred(self):
+        """When both timestamps exist, the successful one is used."""
+        from datetime import datetime, timezone, timedelta
+        # lastSignInDateTime is recent (includes failed attempts)
+        recent_any = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
+        # lastSuccessfulSignInDateTime is old
+        old_success = (datetime.now(timezone.utc) - timedelta(days=200)).isoformat()
+        sp = {
+            **BASE_SP,
+            "_signInActivity": {
+                "lastSignInActivity": {
+                    "lastSignInDateTime": recent_any,
+                    "lastSuccessfulSignInDateTime": old_success,
+                },
+            },
+        }
+        result = analyze_app(sp, stale_days=90)
+        # The successful timestamp is preferred, so app should be stale
+        assert any(s.key == "stale" for s in result.signals)
+
+    def test_fallback_to_any_when_no_successful(self):
+        """When lastSuccessfulSignInDateTime is absent, lastSignInDateTime is used."""
+        from datetime import datetime, timezone, timedelta
+        recent = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
+        sp = {
+            **BASE_SP,
+            "_signInActivity": {
+                "lastSignInActivity": {
+                    "lastSignInDateTime": recent,
+                    # no lastSuccessfulSignInDateTime
+                },
+            },
+        }
+        result = analyze_app(sp, stale_days=90)
+        assert not any(s.key == "stale" for s in result.signals)
+
+    def test_successful_recent_not_stale(self):
+        """When successful timestamp is recent, app is not stale."""
+        from datetime import datetime, timezone, timedelta
+        old_any = (datetime.now(timezone.utc) - timedelta(days=200)).isoformat()
+        recent_success = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
+        sp = {
+            **BASE_SP,
+            "_signInActivity": {
+                "lastSignInActivity": {
+                    "lastSignInDateTime": old_any,
+                    "lastSuccessfulSignInDateTime": recent_success,
+                },
+            },
+        }
+        result = analyze_app(sp, stale_days=90)
+        assert not any(s.key == "stale" for s in result.signals)
+
+
+# ── CA policy cross-reference ──────────────────────────────────────────────
+
+
+class TestCaPolicyCrossReference:
+    """CA policy targeting signal."""
+
+    def _make_ca_policy(self, name: str, include_app_ids: list[str], state: str = "enabled") -> dict:
+        return {
+            "id": f"policy-{name}",
+            "displayName": name,
+            "state": state,
+            "conditions": {
+                "applications": {
+                    "includeApplications": include_app_ids,
+                    "excludeApplications": [],
+                },
+            },
+        }
+
+    def test_app_targeted_by_ca_policy(self):
+        ca = [self._make_ca_policy("Block External", ["test-app-id"])]
+        result = analyze_app(BASE_SP, ca_policies=ca)
+        sig = next((s for s in result.signals if s.key == "ca_policy_target"), None)
+        assert sig is not None
+        assert sig.severity == "info"
+        assert sig.score_contribution == 0
+        assert "Block External" in sig.detail
+
+    def test_app_not_targeted_no_signal(self):
+        ca = [self._make_ca_policy("Block External", ["other-app-id"])]
+        result = analyze_app(BASE_SP, ca_policies=ca)
+        assert not any(s.key == "ca_policy_target" for s in result.signals)
+
+    def test_disabled_policy_ignored(self):
+        ca = [self._make_ca_policy("Block External", ["test-app-id"], state="disabled")]
+        result = analyze_app(BASE_SP, ca_policies=ca)
+        assert not any(s.key == "ca_policy_target" for s in result.signals)
+
+    def test_excluded_app_not_targeted(self):
+        ca = [{
+            "id": "policy-1",
+            "displayName": "Block All",
+            "state": "enabled",
+            "conditions": {
+                "applications": {
+                    "includeApplications": ["test-app-id"],
+                    "excludeApplications": ["test-app-id"],
+                },
+            },
+        }]
+        result = analyze_app(BASE_SP, ca_policies=ca)
+        assert not any(s.key == "ca_policy_target" for s in result.signals)
+
+    def test_multiple_policies_targeting_app(self):
+        ca = [
+            self._make_ca_policy("MFA Policy", ["test-app-id"]),
+            self._make_ca_policy("Location Policy", ["test-app-id"]),
+        ]
+        result = analyze_app(BASE_SP, ca_policies=ca)
+        sig = next(s for s in result.signals if s.key == "ca_policy_target")
+        assert "2" in sig.title
+        assert "policies" in sig.title
+        assert "MFA Policy" in sig.detail
+        assert "Location Policy" in sig.detail
+
+    def test_no_ca_policies_no_signal(self):
+        """When ca_policies is None, no CA signal fires."""
+        result = analyze_app(BASE_SP, ca_policies=None)
+        assert not any(s.key == "ca_policy_target" for s in result.signals)
+
+    def test_case_insensitive_matching(self):
+        """App IDs should match case-insensitively."""
+        sp = {**BASE_SP, "appId": "TEST-APP-ID"}
+        ca = [self._make_ca_policy("MFA", ["test-app-id"])]
+        result = analyze_app(sp, ca_policies=ca)
+        assert any(s.key == "ca_policy_target" for s in result.signals)
+
+
+# ── analyze_all passes ca_policies ──────────────────────────────────────────
+
+
+class TestAnalyzeAllCaPolicies:
+    """analyze_all should pass ca_policies from raw_data to analyze_app."""
+
+    def test_ca_policies_passed_through(self):
+        ca = [{
+            "id": "p1",
+            "displayName": "Test Policy",
+            "state": "enabled",
+            "conditions": {
+                "applications": {
+                    "includeApplications": ["test-app-id"],
+                    "excludeApplications": [],
+                },
+            },
+        }]
+        raw_data = {"apps": [BASE_SP], "ca_policies": ca}
+        results = analyze_all(raw_data)
+        assert any(s.key == "ca_policy_target" for s in results[0].signals)
+
+
+class TestBuildOwnerGroups:
+    """Tests for the _build_owner_groups function in reporter.py."""
+
+    def test_single_owner_single_app(self):
+        from src.reporter import _build_owner_groups
+
+        result = analyze_app(BASE_SP)
+        groups = _build_owner_groups([result])
+        assert len(groups) == 1
+        assert groups[0]["owner_name"] == "Test Owner"
+        assert groups[0]["app_count"] == 1
+        assert groups[0]["apps"][0].app_id == "test-app-id"
+
+    def test_unowned_app_grouped(self):
+        from src.reporter import _build_owner_groups
+
+        sp = {**BASE_SP, "_owners": [], "_disabledOwnerIds": []}
+        result = analyze_app(sp)
+        groups = _build_owner_groups([result])
+        assert any(g["owner_name"] == "Unowned" for g in groups)
+
+    def test_unowned_group_sorted_first(self):
+        from src.reporter import _build_owner_groups
+
+        owned = analyze_app(BASE_SP)
+        unowned = analyze_app({**BASE_SP, "appId": "unowned-app", "_owners": [], "_disabledOwnerIds": []})
+        groups = _build_owner_groups([owned, unowned])
+        assert groups[0]["owner_name"] == "Unowned"
+
+    def test_multi_owner_app_appears_in_each_group(self):
+        from src.reporter import _build_owner_groups
+
+        sp = {**BASE_SP, "_owners": [
+            {"id": "owner-1", "displayName": "Alice", "accountEnabled": True},
+            {"id": "owner-2", "displayName": "Bob", "accountEnabled": True},
+        ]}
+        result = analyze_app(sp)
+        groups = _build_owner_groups([result])
+        assert len(groups) == 2
+        names = {g["owner_name"] for g in groups}
+        assert names == {"Alice", "Bob"}
+        # The app should appear in both groups
+        for g in groups:
+            assert len(g["apps"]) == 1
+
+    def test_disabled_owner_flag(self):
+        from src.reporter import _build_owner_groups
+
+        sp = {**BASE_SP, "_owners": [
+            {"id": "owner-1", "displayName": "Disabled User", "accountEnabled": False},
+        ]}
+        result = analyze_app(sp)
+        groups = _build_owner_groups([result])
+        assert groups[0]["owner_enabled"] is False
+
+    def test_groups_sorted_by_risk(self):
+        from src.reporter import _build_owner_groups
+
+        # Create a high-risk app (no owners triggers signals)
+        high_risk_sp = {**BASE_SP, "appId": "high-risk",
+                        "_owners": [{"id": "o-hr", "displayName": "HighRiskOwner", "accountEnabled": True}],
+                        "passwordCredentials": [{"endDateTime": "2020-01-01T00:00:00Z", "displayName": "old"}]}
+        low_risk_sp = {**BASE_SP, "appId": "low-risk",
+                       "_owners": [{"id": "o-lr", "displayName": "LowRiskOwner", "accountEnabled": True}]}
+        results = [analyze_app(high_risk_sp), analyze_app(low_risk_sp)]
+        groups = _build_owner_groups(results)
+        assert groups[0]["owner_name"] == "HighRiskOwner"
+        assert groups[0]["max_risk_score"] >= groups[1]["max_risk_score"]

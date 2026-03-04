@@ -138,7 +138,11 @@
   tbody td { padding: 10px 14px; font-size: 13px; vertical-align: middle; }
   .app-name { font-weight: 600; color: var(--text); }
   .app-id   { font-size: 11px; color: var(--muted); font-family: monospace; }
-  .app-desc { font-size: 11px; color: var(--muted); margin-top: 3px; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-style: italic; }
+  .app-desc { font-size: 11px; color: var(--text-secondary, #9ca3af); margin-top: 3px; max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .app-desc-label { font-weight: 600; color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.03em; margin-right: 4px; }
+  .app-meta-block { margin-top: 10px; padding: 8px 12px; background: var(--surface); border-radius: 6px; border: 1px solid var(--border); font-size: 12px; color: var(--text); }
+  .app-meta-block .meta-label { font-weight: 600; color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.03em; display: block; margin-bottom: 2px; }
+  .app-meta-block .meta-value { white-space: pre-wrap; word-break: break-word; }
 
   /* ── Expandable rows ─────────────────────────────────────────────────── */
   .expand-row { display: none; background: var(--surface2); }
@@ -212,6 +216,15 @@
     opacity: 0.6;
   }
   .entra-link:hover { opacity: 1; }
+  .saml-badge, .sso-badge {
+    display: inline-block; font-size: 9px; padding: 1px 6px; border-radius: 3px;
+    vertical-align: middle; margin-left: 6px; font-weight: 700; letter-spacing: 0.05em;
+  }
+  .saml-badge { background: rgba(56,189,248,0.15); color: var(--accent); }
+  .sso-badge-oidc { background: rgba(167,139,250,0.15); color: var(--ca-accent); }
+  .sso-badge-password { background: rgba(234,179,8,0.15); color: var(--medium); }
+  .sso-badge-linked { background: rgba(34,197,94,0.15); color: var(--low); }
+  .sso-badge-other { background: rgba(155,163,181,0.15); color: var(--muted); }
 
   /* ── Recommendation box ──────────────────────────────────────────────── */
   .rec-box {
@@ -231,6 +244,15 @@
     background: var(--surface); border: 1px solid var(--border); color: var(--text);
     border-radius: 8px; padding: 8px 14px; font-size: 13px; outline: none; cursor: pointer;
   }
+  .filter-bar select:focus { border-color: var(--accent); }
+  .filter-bar .filter-group { display: flex; align-items: center; gap: 6px; }
+  .filter-bar .filter-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; white-space: nowrap; }
+  .filter-bar .filter-reset {
+    border: none; background: none; color: var(--muted); font-size: 11px;
+    cursor: pointer; padding: 2px 6px; border-radius: 4px; white-space: nowrap;
+  }
+  .filter-bar .filter-reset:hover { color: var(--accent); background: rgba(56,189,248,0.1); }
+  .filter-bar .active-filter { border-color: var(--accent) !important; color: var(--accent); }
 
   /* ── Risk band filter buttons ────────────────────────────────────────── */
   .band-filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
@@ -400,7 +422,13 @@
     color: var(--muted);
     margin-top: 6px;
     line-height: 1.5;
+    white-space: pre-wrap;
   }
+  .signin-breakdown { margin-top: 10px; padding: 8px 12px; background: var(--surface); border-radius: 6px; border: 1px solid var(--border); }
+  .signin-breakdown .si-label { font-weight: 600; color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.03em; display: block; margin-bottom: 6px; }
+  .signin-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 4px 16px; font-size: 12px; }
+  .signin-grid .si-type { color: var(--muted); }
+  .signin-grid .si-none { color: var(--muted); font-style: italic; }
   .signal-block {
     margin-bottom: 12px;
     padding: 10px 12px 12px;
@@ -465,6 +493,7 @@
   #sec-creds    .section-title { border-left-color: var(--medium); }
   #sec-orphaned .section-title { border-left-color: var(--high); }
   #sec-priv     .section-title { border-left-color: var(--critical); }
+  #sec-owners   .section-title { border-left-color: var(--brand); }
 
   /* ── Section count badge ───────────────────────────────────────────── */
   .section-count {
@@ -494,6 +523,40 @@
   .section-banner-info {
     background: rgba(234,179,8,0.08); border: 1px solid rgba(234,179,8,0.25); color: #fde047;
   }
+
+  /* ── Owner view ──────────────────────────────────────────────────── */
+  .owner-group {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    margin-bottom: 12px; overflow: hidden;
+  }
+  .owner-group-header {
+    display: flex; align-items: center; gap: 12px; padding: 12px 16px;
+    cursor: pointer; user-select: none; transition: background 0.15s;
+  }
+  .owner-group-header:hover { background: rgba(255,255,255,0.03); }
+  .owner-group-chevron {
+    font-size: 12px; color: var(--muted); transition: transform 0.2s; flex-shrink: 0;
+  }
+  .owner-group.open .owner-group-chevron { transform: rotate(90deg); }
+  .owner-group-name { font-weight: 600; font-size: 14px; }
+  .owner-group-upn { font-size: 12px; color: var(--muted); }
+  .owner-group-disabled { color: var(--critical); font-size: 11px; font-weight: 600; }
+  .owner-group-stats {
+    margin-left: auto; display: flex; align-items: center; gap: 12px; font-size: 12px; color: var(--muted);
+  }
+  .owner-group-body { display: none; border-top: 1px solid var(--border); }
+  .owner-group.open .owner-group-body { display: block; }
+  .owner-app-row {
+    display: flex; align-items: center; gap: 12px; padding: 8px 16px 8px 40px;
+    border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 13px;
+  }
+  .owner-app-row:last-child { border-bottom: none; }
+  .owner-app-name { flex: 1; min-width: 0; }
+  .owner-app-name a { color: var(--text); }
+  .owner-app-name a:hover { color: var(--accent); }
+  .owner-app-score { width: 50px; text-align: right; font-weight: 700; }
+  .owner-app-band { width: 70px; text-align: center; }
+  .owner-app-signals { flex: 0 0 auto; display: flex; gap: 4px; flex-wrap: wrap; max-width: 300px; }
 
   /* ── Row striping for sub-sections ─────────────────────────────────── */
   #tbl-critical tbody tr.expand-trigger:nth-of-type(4n+1),
@@ -616,6 +679,7 @@
     .brand-logo { -webkit-text-fill-color: #4f46e5; }
     .surface, .surface2 { background: #f8fafc; }
     .filter-bar { display: none; }
+    .band-filters { display: none; }
     .export-toolbar { display: none; }
     .cb-col { display: none; }
     .sub-filter-bar { display: none; }
@@ -639,12 +703,57 @@
 
 {# ── Reusable macro: app name / app ID / description cell ──────────────────── #}
 {% macro app_cell(app) %}
-<div class="app-name"><button class="review-status" data-appid="{{ app.app_id | lower }}" data-status="unreviewed" onclick="event.stopPropagation(); cycleReviewStatus(this)" title="Click to mark review status">&#9675;</button>{{ app.display_name }}<a href="https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationMenuBlade/~/Overview/appId/{{ app.app_id }}" target="_blank" rel="noopener" title="Open in Entra admin center" class="entra-link">↗</a></div>
+<div class="app-name"><button class="review-status" data-appid="{{ app.app_id | lower }}" data-status="unreviewed" onclick="event.stopPropagation(); cycleReviewStatus(this)" title="Click to mark review status">&#9675;</button>{{ app.display_name }}{% if app.sso_method %}{% if app.is_saml_app %}<span class="saml-badge">SAML</span>{% elif app.sso_method == 'OIDC' %}<span class="sso-badge sso-badge-oidc">OIDC</span>{% elif app.sso_method == 'OAuth2/OIDC' %}<span class="sso-badge sso-badge-oidc">OAuth2/OIDC</span>{% elif app.sso_method == 'Password' %}<span class="sso-badge sso-badge-password">Password SSO</span>{% elif app.sso_method == 'Linked' %}<span class="sso-badge sso-badge-linked">Linked</span>{% else %}<span class="sso-badge sso-badge-other">{{ app.sso_method }}</span>{% endif %}{% endif %}<a href="https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationMenuBlade/~/Overview/appId/{{ app.app_id }}" target="_blank" rel="noopener" title="Open in Entra admin center" class="entra-link">↗</a></div>
 <div class="app-id">{{ app.app_id }}<button class="copy-id-btn" onclick="event.stopPropagation(); copyAppId(this, '{{ app.app_id }}')" title="Copy app ID">&#9112;</button></div>
-{% set _desc = (app.description or app.notes or '') | trim %}
-{% if _desc %}
-<div class="app-desc" title="{{ _desc }}">{{ _desc[:100] }}{{ '…' if _desc | length > 100 else '' }}</div>
+{% set _notes = (app.notes or '') | trim %}
+{% set _desc = (app.description or '') | trim %}
+{% set _display = _notes or _desc %}
+{% if _display %}
+<div class="app-desc" title="{{ _display }}"><span class="app-desc-label">{{ 'Notes' if _notes else 'Desc' }}:</span>{{ _display[:120] }}{{ '…' if _display | length > 120 else '' }}</div>
 {% endif %}
+{% endmacro %}
+
+{# ── Reusable macro: notes/description block for expand rows ─────────────── #}
+{% macro app_meta_block(app) %}
+{% set _notes = (app.notes or '') | trim %}
+{% set _desc = (app.description or '') | trim %}
+{% if _notes or _desc or app.preferred_sso_mode %}
+<div class="app-meta-block">
+  {% if app.preferred_sso_mode %}<div><span class="meta-label">SSO Mode</span><span class="meta-value">{{ app.preferred_sso_mode }}</span></div>{% endif %}
+  {% if _notes %}<div{% if app.preferred_sso_mode %} style="margin-top:6px;"{% endif %}><span class="meta-label">Notes</span><span class="meta-value">{{ _notes }}</span></div>{% endif %}
+  {% if _desc %}<div{% if app.preferred_sso_mode or _notes %} style="margin-top:6px;"{% endif %}><span class="meta-label">Description</span><span class="meta-value">{{ _desc }}</span></div>{% endif %}
+</div>
+{% endif %}
+{% endmacro %}
+
+{# ── Reusable macro: sign-in activity breakdown ───────────────────────────── #}
+{% macro signin_breakdown(app) %}
+<div class="signin-breakdown">
+  <span class="si-label">Sign-in Activity Breakdown{% if app.sso_method %} {% if app.is_saml_app %}<span class="saml-badge">SAML</span>{% elif app.sso_method == 'OIDC' %}<span class="sso-badge sso-badge-oidc">OIDC</span>{% elif app.sso_method == 'OAuth2/OIDC' %}<span class="sso-badge sso-badge-oidc">OAuth2/OIDC</span>{% elif app.sso_method == 'Password' %}<span class="sso-badge sso-badge-password">Password SSO</span>{% else %}<span class="sso-badge sso-badge-other">{{ app.sso_method }}</span>{% endif %}{% endif %}</span>
+  {% if not app.sign_in_data_available %}
+  <div style="font-size:12px; color:var(--muted); font-style:italic;">
+    {%- if app.is_saml_app -%}
+    SAML app — the servicePrincipalSignInActivities endpoint may not capture SAML sign-ins. Check Entra ID sign-in logs directly.
+    {%- else -%}
+    No sign-in data returned by Graph API for this app.
+    {%- endif -%}
+  </div>
+  {% else %}
+  <div class="signin-grid">
+    {% set si_types = [
+      ("Interactive", app.last_interactive_sign_in),
+      ("Non-interactive", app.last_non_interactive_sign_in),
+      ("Delegated (client)", app.last_delegated_client_sign_in),
+      ("Delegated (resource)", app.last_delegated_resource_sign_in),
+      ("App-only (client)", app.last_app_auth_client_sign_in),
+      ("App-only (resource)", app.last_app_auth_resource_sign_in),
+    ] %}
+    {% for label, val in si_types %}
+    <div><span class="si-type">{{ label }}:</span> {% if val %}<span style="font-weight:600;">{{ val | format_date }}</span>{% else %}<span class="si-none">none</span>{% endif %}</div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
 {% endmacro %}
 
 <!-- ── Header ────────────────────────────────────────────────────────────── -->
@@ -680,6 +789,7 @@
     {% if orphaned_apps %}<li><a href="#sec-orphaned">Orphaned</a></li>{% endif %}
     {% if high_privilege_apps %}<li><a href="#sec-priv">Over-Privileged</a></li>{% endif %}
     <li><a href="#sec-ca">CA Coverage</a></li>
+    {% if owner_groups %}<li><a href="#sec-owners">By Owner</a></li>{% endif %}
     <li><a href="#sec-methodology">Methodology</a></li>
     <li style="margin-left: auto;"><a href="#" onclick="event.preventDefault(); document.getElementById('kbd-modal').classList.add('open')" title="Keyboard shortcuts" style="opacity: 0.5; font-size: 11px;">? Shortcuts</a></li>
   </ul>
@@ -803,6 +913,61 @@
     </div>
     <div class="filter-bar">
       <input type="text" id="inv-search" placeholder="Search by name or app ID..." oninput="filterTable()">
+      <div class="filter-group">
+        <span class="filter-label">Enabled</span>
+        <select id="inv-filter-enabled" onchange="filterTable()">
+          <option value="">All</option>
+          <option value="yes">Enabled</option>
+          <option value="no">Disabled</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">Type</span>
+        <select id="inv-filter-sptype" onchange="filterTable()">
+          <option value="">All types</option>
+          <option value="Application">Application</option>
+          <option value="ManagedIdentity">Managed Identity</option>
+          <option value="Legacy">Legacy</option>
+          <option value="SocialIdp">Social IdP</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">Owners</span>
+        <select id="inv-filter-owners" onchange="filterTable()">
+          <option value="">All</option>
+          <option value="yes">Has owners</option>
+          <option value="no">No owners</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">Credentials</span>
+        <select id="inv-filter-creds" onchange="filterTable()">
+          <option value="">All</option>
+          <option value="yes">Expired / expiring</option>
+          <option value="no">OK / none</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">Privilege</span>
+        <select id="inv-filter-priv" onchange="filterTable()">
+          <option value="">All</option>
+          <option value="yes">High privilege</option>
+          <option value="no">Normal</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">SSO Method</span>
+        <select id="inv-filter-sso" onchange="filterTable()">
+          <option value="">All</option>
+          <option value="saml">SAML</option>
+          <option value="oidc">OIDC</option>
+          <option value="oauth2/oidc">OAuth2/OIDC</option>
+          <option value="password">Password SSO</option>
+          <option value="linked">Linked</option>
+          <option value="none">No SSO configured</option>
+        </select>
+      </div>
+      <button class="filter-reset" id="inv-filter-reset" onclick="resetFilters()" style="display:none;">Reset filters</button>
     </div>
     <div class="export-toolbar" id="export-toolbar">
       <button class="export-btn" id="btn-export-csv" onclick="exportSelectedCSV()" disabled data-export-btn="tbl-inventory">Export Selected to CSV</button>
@@ -841,6 +1006,10 @@
               data-has-near-expiry-cert="{{ 'yes' if app.has_near_expiry_cert else 'no' }}"
               data-has-high-privilege="{{ 'yes' if app.has_high_privilege else 'no' }}"
               data-is-microsoft="{{ 'yes' if app.is_microsoft_first_party else 'no' }}"
+              data-is-saml="{{ 'yes' if app.is_saml_app else 'no' }}"
+              data-sso-method="{{ app.sso_method | lower if app.sso_method else '' }}"
+              data-has-owners="{{ 'yes' if app.owner_count > 0 else 'no' }}"
+              data-has-cred-issue="{{ 'yes' if (app.has_expired_secret or app.has_expired_cert or app.has_near_expiry_secret or app.has_near_expiry_cert) else 'no' }}"
               data-signal-keys="{{ app.signals | map(attribute='key') | join('|') }}"
               data-signal-count="{{ app.signals | length }}"
               data-primary-rec="{{ app.primary_recommendation | e }}">
@@ -874,6 +1043,7 @@
           <tr class="expand-row" id="inv-{{ loop.index }}">
             <td colspan="9">
               <div class="expand-content">
+                {{ app_meta_block(app) }}
                 {% for sig in app.signals %}
                 <div class="signal-block sev-{{ sig.severity }}">
                   <span class="signal-chip signal-{{ sig.severity }}">{{ sig.title }}</span>
@@ -884,6 +1054,7 @@
                 {% if not app.signals %}
                 <p style="color: var(--muted); font-style: italic; font-size: 13px;">No signals — this app passed all hygiene checks.</p>
                 {% endif %}
+                {{ signin_breakdown(app) }}
               </div>
             </td>
           </tr>
@@ -971,6 +1142,7 @@
           <tr class="expand-row" id="crit-{{ loop.index }}">
             <td colspan="8">
               <div class="expand-content">
+                {{ app_meta_block(app) }}
                 {% for sig in app.signals %}
                 <div class="signal-block sev-{{ sig.severity }}">
                   <span class="signal-chip signal-{{ sig.severity }}">{{ sig.title }}</span>
@@ -978,6 +1150,7 @@
                   {% if sig.recommendation %}<p class="signal-rec-text">→ {{ sig.recommendation }}{% if sig.doc_url %}<a href="{{ sig.doc_url }}" target="_blank" rel="noopener" class="doc-link">Learn more ↗</a>{% endif %}</p>{% endif %}
                 </div>
                 {% endfor %}
+                {{ signin_breakdown(app) }}
               </div>
             </td>
           </tr>
@@ -1055,6 +1228,7 @@
           <tr class="expand-row" id="stale-{{ loop.index }}">
             <td colspan="7">
               <div class="expand-content">
+                {{ app_meta_block(app) }}
                 {% for sig in app.signals %}
                 <div class="signal-block sev-{{ sig.severity }}">
                   <span class="signal-chip signal-{{ sig.severity }}">{{ sig.title }}</span>
@@ -1062,6 +1236,7 @@
                   {% if sig.recommendation %}<p class="signal-rec-text">→ {{ sig.recommendation }}{% if sig.doc_url %}<a href="{{ sig.doc_url }}" target="_blank" rel="noopener" class="doc-link">Learn more ↗</a>{% endif %}</p>{% endif %}
                 </div>
                 {% endfor %}
+                {{ signin_breakdown(app) }}
               </div>
             </td>
           </tr>
@@ -1151,6 +1326,7 @@
           <tr class="expand-row" id="cred-{{ loop.index }}">
             <td colspan="9">
               <div class="expand-content">
+                {{ app_meta_block(app) }}
                 {% for sig in app.signals %}
                 <div class="signal-block sev-{{ sig.severity }}">
                   <span class="signal-chip signal-{{ sig.severity }}">{{ sig.title }}</span>
@@ -1158,6 +1334,7 @@
                   {% if sig.recommendation %}<p class="signal-rec-text">→ {{ sig.recommendation }}{% if sig.doc_url %}<a href="{{ sig.doc_url }}" target="_blank" rel="noopener" class="doc-link">Learn more ↗</a>{% endif %}</p>{% endif %}
                 </div>
                 {% endfor %}
+                {{ signin_breakdown(app) }}
               </div>
             </td>
           </tr>
@@ -1233,6 +1410,7 @@
           <tr class="expand-row" id="orphan-{{ loop.index }}">
             <td colspan="6">
               <div class="expand-content">
+                {{ app_meta_block(app) }}
                 {% for sig in app.signals %}
                 <div class="signal-block sev-{{ sig.severity }}">
                   <span class="signal-chip signal-{{ sig.severity }}">{{ sig.title }}</span>
@@ -1240,6 +1418,7 @@
                   {% if sig.recommendation %}<p class="signal-rec-text">→ {{ sig.recommendation }}{% if sig.doc_url %}<a href="{{ sig.doc_url }}" target="_blank" rel="noopener" class="doc-link">Learn more ↗</a>{% endif %}</p>{% endif %}
                 </div>
                 {% endfor %}
+                {{ signin_breakdown(app) }}
               </div>
             </td>
           </tr>
@@ -1313,6 +1492,7 @@
           <tr class="expand-row" id="priv-{{ loop.index }}">
             <td colspan="5">
               <div class="expand-content">
+                {{ app_meta_block(app) }}
                 {% for sig in app.signals %}
                 <div class="signal-block sev-{{ sig.severity }}">
                   <span class="signal-chip signal-{{ sig.severity }}">{{ sig.title }}</span>
@@ -1320,6 +1500,7 @@
                   {% if sig.recommendation %}<p class="signal-rec-text">→ {{ sig.recommendation }}{% if sig.doc_url %}<a href="{{ sig.doc_url }}" target="_blank" rel="noopener" class="doc-link">Learn more ↗</a>{% endif %}</p>{% endif %}
                 </div>
                 {% endfor %}
+                {{ signin_breakdown(app) }}
               </div>
             </td>
           </tr>
@@ -1418,7 +1599,7 @@
 
     <!-- App coverage table -->
     <div class="section-title" style="font-size:15px; margin-bottom:12px; border-color: var(--ca-accent);">App Coverage</div>
-    <div class="table-wrap" style="margin-bottom:28px;">
+    <div class="table-wrap" style="margin-bottom:28px; max-height: 500px; overflow-y: auto;">
       <table id="tbl-ca-apps">
         <thead>
           <tr>
@@ -1459,7 +1640,7 @@
 
     <!-- Policy inventory table -->
     <div class="section-title" style="font-size:15px; margin-bottom:12px; border-color: var(--ca-accent);">Policy Inventory</div>
-    <div class="table-wrap">
+    <div class="table-wrap" style="max-height: 400px; overflow-y: auto;">
       <table id="tbl-ca-policies">
         <thead>
           <tr>
@@ -1497,6 +1678,52 @@
 
     {% endif %}{# ca_available #}
   </div>
+
+  <!-- ── By Owner ──────────────────────────────────────────────────────── -->
+  {% if owner_groups %}
+  <div class="section" id="sec-owners">
+    <div class="section-title">
+      Apps by Owner<span class="section-count">{{ owner_groups | length }}</span>
+      <div class="section-subtitle">Apps grouped by assigned owner — click an owner to expand their apps</div>
+    </div>
+    <div class="sub-filter-bar">
+      <input type="text" id="owner-search" placeholder="Search by owner name, UPN, or app name..." oninput="filterOwnerGroups(this.value)">
+      <span class="sub-count" id="owner-match-count"></span>
+    </div>
+    <div id="owner-groups-container">
+      {% for group in owner_groups %}
+      <div class="owner-group" data-owner-name="{{ group.owner_name | lower }}" data-owner-upn="{{ group.owner_upn | lower }}" data-app-names="{{ group.apps | map(attribute='display_name') | join('|') | lower }}">
+        <div class="owner-group-header" onclick="toggleOwnerGroup(this.parentElement)">
+          <span class="owner-group-chevron">&#9654;</span>
+          <span class="owner-group-name">{{ group.owner_name }}</span>
+          {% if group.owner_upn %}<span class="owner-group-upn">({{ group.owner_upn }})</span>{% endif %}
+          {% if not group.owner_enabled %}<span class="owner-group-disabled">DISABLED</span>{% endif %}
+          <div class="owner-group-stats">
+            <span>{{ group.app_count }} app{{ 's' if group.app_count != 1 else '' }}</span>
+            <span class="badge badge-{{ group.max_risk_band }}" style="font-size: 10px;">{{ group.max_risk_band }}</span>
+          </div>
+        </div>
+        <div class="owner-group-body">
+          {% for app in group.apps %}
+          <div class="owner-app-row">
+            <div class="owner-app-name">
+              <a href="https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationMenuBlade/~/Overview/appId/{{ app.app_id }}" target="_blank" rel="noopener" title="Open in Entra admin center">{{ app.display_name }}</a>{% if app.sso_method %}{% if app.is_saml_app %}<span class="saml-badge">SAML</span>{% elif app.sso_method == 'OIDC' %}<span class="sso-badge sso-badge-oidc">OIDC</span>{% elif app.sso_method == 'Password' %}<span class="sso-badge sso-badge-password">Password SSO</span>{% elif app.sso_method == 'Linked' %}<span class="sso-badge sso-badge-linked">Linked</span>{% else %}<span class="sso-badge sso-badge-other">{{ app.sso_method }}</span>{% endif %}{% endif %}
+              <span style="font-size:11px; color:var(--muted); margin-left:6px;">{{ app.app_id }}</span>
+            </div>
+            <div class="owner-app-score" style="color: var(--{{ app.risk_band }})">{{ app.risk_score }}</div>
+            <div class="owner-app-band"><span class="badge badge-{{ app.risk_band }}" style="font-size:10px;">{{ app.risk_band }}</span></div>
+            <div class="owner-app-signals">
+              {% for sig in app.signals[:3] %}<span class="signal-preview-chip spc-{{ sig.severity }}" style="font-size:10px;">{{ sig.title }}</span>{% endfor %}
+              {% if app.signals | length > 3 %}<span class="signal-more">+{{ app.signals | length - 3 }}</span>{% endif %}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
 
   <!-- ── Methodology ────────────────────────────────────────────────────── -->
   <div class="section" id="sec-methodology">
@@ -1555,6 +1782,7 @@
     <div class="kbd-row"><span class="kbd-desc">Jump to Orphaned</span><span class="kbd-key">6</span></div>
     <div class="kbd-row"><span class="kbd-desc">Jump to Over-Privileged</span><span class="kbd-key">7</span></div>
     <div class="kbd-row"><span class="kbd-desc">Jump to CA Coverage</span><span class="kbd-key">8</span></div>
+    <div class="kbd-row"><span class="kbd-desc">Jump to By Owner</span><span class="kbd-key">9</span></div>
     <div class="kbd-row"><span class="kbd-desc">Close modal / Escape</span><span class="kbd-key">Esc</span></div>
   </div>
 </div>
@@ -1659,7 +1887,7 @@ function restoreReviewStatuses() {
 }
 
 function updateAllProgressBars() {
-  ['tbl-critical', 'tbl-stale', 'tbl-creds', 'tbl-orphaned', 'tbl-priv'].forEach(function(tableId) {
+  ['tbl-critical', 'tbl-stale', 'tbl-creds', 'tbl-orphaned', 'tbl-priv', 'tbl-owners'].forEach(function(tableId) {
     var bar = document.querySelector('[data-progress="' + tableId + '"]');
     if (!bar) return;
     var btns = document.querySelectorAll('#' + tableId + ' .review-status');
@@ -1739,6 +1967,29 @@ function exportAllTableCSV(tableId) {
   downloadBlob(blob, 'enterprise_zapp_' + tableId.replace('tbl-','') + '_all.csv');
 }
 
+// ── Owner group expand/collapse ──────────────────────────────────────────────
+function toggleOwnerGroup(el) {
+  el.classList.toggle('open');
+}
+
+function filterOwnerGroups(query) {
+  query = (query || '').toLowerCase();
+  var groups = document.querySelectorAll('#owner-groups-container .owner-group');
+  var visible = 0;
+  groups.forEach(function(g) {
+    var name = g.dataset.ownerName || '';
+    var upn = g.dataset.ownerUpn || '';
+    var apps = g.dataset.appNames || '';
+    var match = !query || name.includes(query) || upn.includes(query) || apps.includes(query);
+    g.style.display = match ? '' : 'none';
+    if (match) visible++;
+  });
+  var counter = document.getElementById('owner-match-count');
+  if (counter) {
+    counter.textContent = query ? visible + ' of ' + groups.length + ' owners matching' : '';
+  }
+}
+
 // ── Back to top button visibility ────────────────────────────────────────────
 (function() {
   var btn = document.getElementById('back-to-top');
@@ -1750,7 +2001,7 @@ function exportAllTableCSV(tableId) {
 
 // ── Keyboard shortcuts ──────────────────────────────────────────────────────
 (function() {
-  var sectionMap = { '1': 'sec-summary', '2': 'sec-inventory', '3': 'sec-critical', '4': 'sec-stale', '5': 'sec-creds', '6': 'sec-orphaned', '7': 'sec-priv', '8': 'sec-ca' };
+  var sectionMap = { '1': 'sec-summary', '2': 'sec-inventory', '3': 'sec-critical', '4': 'sec-stale', '5': 'sec-creds', '6': 'sec-orphaned', '7': 'sec-priv', '8': 'sec-ca', '9': 'sec-owners' };
   document.addEventListener('keydown', function(e) {
     // Ignore if typing in an input
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
@@ -1861,10 +2112,55 @@ function toggleMicrosoft() {
 }
 
 // ── Inventory filter ─────────────────────────────────────────────────────────
+function _getDropdownFilters() {
+  return {
+    enabled: (document.getElementById('inv-filter-enabled') || {}).value || '',
+    spType:  (document.getElementById('inv-filter-sptype')  || {}).value || '',
+    owners:  (document.getElementById('inv-filter-owners')  || {}).value || '',
+    creds:   (document.getElementById('inv-filter-creds')   || {}).value || '',
+    priv:    (document.getElementById('inv-filter-priv')    || {}).value || '',
+    sso:     (document.getElementById('inv-filter-sso')     || {}).value || '',
+  };
+}
+
+function _hasActiveDropdown(df) {
+  return df.enabled || df.spType || df.owners || df.creds || df.priv || df.sso;
+}
+
+function _highlightActiveDropdowns(df) {
+  var ids = {
+    'inv-filter-enabled': df.enabled,
+    'inv-filter-sptype':  df.spType,
+    'inv-filter-owners':  df.owners,
+    'inv-filter-creds':   df.creds,
+    'inv-filter-priv':    df.priv,
+    'inv-filter-sso':     df.sso,
+  };
+  for (var id in ids) {
+    var el = document.getElementById(id);
+    if (el) {
+      if (ids[id]) { el.classList.add('active-filter'); } else { el.classList.remove('active-filter'); }
+    }
+  }
+  var resetBtn = document.getElementById('inv-filter-reset');
+  if (resetBtn) resetBtn.style.display = _hasActiveDropdown(df) ? '' : 'none';
+}
+
+function resetFilters() {
+  ['inv-filter-enabled','inv-filter-sptype','inv-filter-owners','inv-filter-creds','inv-filter-priv','inv-filter-sso'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  filterTable();
+}
+
 function filterTable() {
   const search = document.getElementById('inv-search').value.toLowerCase();
+  const df     = _getDropdownFilters();
   const rows   = document.querySelectorAll('#tbl-inventory tbody tr');
   let visible  = 0;
+
+  _highlightActiveDropdowns(df);
 
   rows.forEach(function(row) {
     // Expand rows follow their parent data row — skip independent evaluation.
@@ -1879,7 +2175,17 @@ function filterTable() {
     const matchBand      = !_activeBand || rband === _activeBand;
     const matchMicrosoft = !_hideMicrosoft || !isMsft;
 
-    const show = matchSearch && matchBand && matchMicrosoft;
+    // Dropdown filters
+    const matchEnabled = !df.enabled || row.dataset.accountEnabled === df.enabled;
+    const matchSpType  = !df.spType  || row.dataset.spType === df.spType;
+    const matchOwners  = !df.owners  || row.dataset.hasOwners === df.owners;
+    const matchCreds   = !df.creds   || row.dataset.hasCredIssue === df.creds;
+    const matchPriv    = !df.priv    || row.dataset.hasHighPrivilege === df.priv;
+    const matchSso     = !df.sso     || (df.sso === 'none' ? !row.dataset.ssoMethod : row.dataset.ssoMethod === df.sso);
+
+    const show = matchSearch && matchBand && matchMicrosoft
+              && matchEnabled && matchSpType && matchOwners
+              && matchCreds && matchPriv && matchSso;
     row.style.display = show ? '' : 'none';
 
     // Co-hide the sibling expand row so an open expand row doesn't orphan.
@@ -2288,7 +2594,10 @@ function changePageSize(val) {
 var _origFilterTable = filterTable;
 filterTable = function() {
   var search = document.getElementById('inv-search').value.toLowerCase();
+  var df = _getDropdownFilters();
   var rows = document.querySelectorAll('#tbl-inventory tbody tr');
+
+  _highlightActiveDropdowns(df);
 
   rows.forEach(function(row) {
     if (row.classList.contains('expand-row')) return;
@@ -2302,7 +2611,17 @@ filterTable = function() {
     var matchBand      = !_activeBand || rband === _activeBand;
     var matchMicrosoft = !_hideMicrosoft || !isMsft;
 
-    var show = matchSearch && matchBand && matchMicrosoft;
+    // Dropdown filters
+    var matchEnabled = !df.enabled || row.dataset.accountEnabled === df.enabled;
+    var matchSpType  = !df.spType  || row.dataset.spType === df.spType;
+    var matchOwners  = !df.owners  || row.dataset.hasOwners === df.owners;
+    var matchCreds   = !df.creds   || row.dataset.hasCredIssue === df.creds;
+    var matchPriv    = !df.priv    || row.dataset.hasHighPrivilege === df.priv;
+    var matchSso     = !df.sso     || (df.sso === 'none' ? !row.dataset.ssoMethod : row.dataset.ssoMethod === df.sso);
+
+    var show = matchSearch && matchBand && matchMicrosoft
+            && matchEnabled && matchSpType && matchOwners
+            && matchCreds && matchPriv && matchSso;
     row.dataset._filteredOut = show ? '0' : '1';
     if (!show) {
       row.style.display = 'none';

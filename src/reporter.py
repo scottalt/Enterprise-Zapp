@@ -22,6 +22,65 @@ from . import __version__
 from .analyzer import AppResult, band_counts
 from .ca_analyzer import AppCoverage, PolicySummary
 
+# ── Owner grouping ────────────────────────────────────────────────────────────
+
+
+def _build_owner_groups(results: list[AppResult]) -> list[dict]:
+    """
+    Group apps by owner.
+
+    Returns a list of dicts sorted by number of apps (descending), each with:
+        owner_name, owner_upn, owner_id, owner_enabled, apps (list[AppResult]),
+        max_risk_score, max_risk_band
+    Apps with multiple owners appear under each owner.
+    Apps with no owners appear under an "Unowned" group.
+    """
+    groups: dict[str, dict] = {}
+
+    for app in results:
+        if not app.owners:
+            key = "__unowned__"
+            if key not in groups:
+                groups[key] = {
+                    "owner_name": "Unowned",
+                    "owner_upn": "",
+                    "owner_id": "",
+                    "owner_enabled": True,
+                    "apps": [],
+                }
+            groups[key]["apps"].append(app)
+        else:
+            for owner in app.owners:
+                oid = owner.get("id", "")
+                key = oid or owner.get("userPrincipalName", "unknown")
+                if key not in groups:
+                    groups[key] = {
+                        "owner_name": owner.get("displayName") or owner.get("userPrincipalName") or "(unknown)",
+                        "owner_upn": owner.get("userPrincipalName", ""),
+                        "owner_id": oid,
+                        "owner_enabled": owner.get("accountEnabled", True),
+                        "apps": [],
+                    }
+                groups[key]["apps"].append(app)
+
+    # Compute aggregate stats per group
+    result_list = []
+    for group in groups.values():
+        apps = group["apps"]
+        max_score = max((a.risk_score for a in apps), default=0)
+        band_order = {"critical": 0, "high": 1, "medium": 2, "low": 3, "clean": 4}
+        worst_band = min((a.risk_band for a in apps), key=lambda b: band_order.get(b, 5))
+        group["max_risk_score"] = max_score
+        group["max_risk_band"] = worst_band
+        group["app_count"] = len(apps)
+        # Sort apps within each group by risk score descending
+        group["apps"] = sorted(apps, key=lambda a: a.risk_score, reverse=True)
+        result_list.append(group)
+
+    # Sort groups: unowned first, then by max risk score descending
+    result_list.sort(key=lambda g: (0 if g["owner_name"] == "Unowned" else 1, -g["max_risk_score"]))
+    return result_list
+
 console = Console()
 
 TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
@@ -179,6 +238,9 @@ def generate_html(
         covered_count = 0
         ca_coverage_pct = 0
 
+    # ── Owner grouping ──────────────────────────────────────────────────
+    owner_groups = _build_owner_groups(results)
+
     html_content = template.render(
         tenant_name=tenant.get("displayName", "Unknown Tenant"),
         tenant_id=tenant.get("id", ""),
@@ -207,6 +269,7 @@ def generate_html(
         ca_policy_summaries=ca_policy_summaries,
         ca_covered_count=covered_count,
         ca_coverage_pct=ca_coverage_pct,
+        owner_groups=owner_groups,
     )
 
     output_path.write_text(html_content, encoding="utf-8")
@@ -229,6 +292,8 @@ def generate_csv(results: list[AppResult], output_path: Path) -> Path:
         "app_name",
         "app_id",
         "object_id",
+        "description",
+        "notes",
         "account_enabled",
         "sp_type",
         "created_at",
@@ -236,6 +301,7 @@ def generate_csv(results: list[AppResult], output_path: Path) -> Path:
         "days_since_sign_in",
         "risk_score",
         "risk_band",
+        "action_tags",
         "owner_count",
         "assignment_count",
         "has_expired_secret",
@@ -271,6 +337,8 @@ def generate_csv(results: list[AppResult], output_path: Path) -> Path:
                     "app_name": _csv_safe(r.display_name),
                     "app_id": r.app_id,
                     "object_id": r.sp_id,
+                    "description": _csv_safe(r.description or ""),
+                    "notes": _csv_safe(r.notes or ""),
                     "account_enabled": "yes" if r.account_enabled else "no",
                     "sp_type": r.sp_type,
                     "created_at": r.created_datetime or "",
@@ -278,6 +346,7 @@ def generate_csv(results: list[AppResult], output_path: Path) -> Path:
                     "days_since_sign_in": r.days_since_sign_in if r.days_since_sign_in is not None else "",
                     "risk_score": r.risk_score,
                     "risk_band": r.risk_band,
+                    "action_tags": "|".join(r.action_tags) if r.action_tags else "",
                     "owner_count": r.owner_count,
                     "assignment_count": r.assignment_count,
                     "has_expired_secret": "yes" if r.has_expired_secret else "no",
