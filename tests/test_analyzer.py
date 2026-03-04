@@ -1270,3 +1270,89 @@ class TestActionTags:
     def test_clean_app_has_no_action_tags(self):
         result = analyze_app(BASE_SP)
         assert result.action_tags == []
+
+
+# ── Sign-in activity breakdown and no_sign_in_data ───────────────────────
+
+
+class TestNoSignInData:
+    """When Graph returns no sign-in record (empty dict), flag it."""
+
+    def test_no_sign_in_data_signal(self):
+        sp = {**BASE_SP, "_signInActivity": {}}
+        result = analyze_app(sp)
+        assert any(s.key == "no_sign_in_data" for s in result.signals)
+        assert not result.sign_in_data_available
+
+    def test_no_sign_in_data_score(self):
+        sp = {**BASE_SP, "_signInActivity": {}}
+        result = analyze_app(sp)
+        sig = next(s for s in result.signals if s.key == "no_sign_in_data")
+        assert sig.score_contribution == 5
+        assert sig.severity == "low"
+
+    def test_microsoft_first_party_skips_no_sign_in_data(self):
+        sp = {
+            **BASE_SP,
+            "_signInActivity": {},
+            "appOwnerOrganizationId": "f8cdef31-a31e-4b4a-93e4-5f571e91255a",
+        }
+        result = analyze_app(sp)
+        assert not any(s.key == "no_sign_in_data" for s in result.signals)
+
+    def test_sign_in_record_present_does_not_fire(self):
+        """When Graph returns a sign-in record (even with empty activity), no_sign_in_data should not fire."""
+        sp = {
+            **BASE_SP,
+            "_signInActivity": {"lastSignInActivity": {}},
+        }
+        result = analyze_app(sp)
+        assert result.sign_in_data_available
+        assert not any(s.key == "no_sign_in_data" for s in result.signals)
+
+
+class TestSignInBreakdown:
+    """Verify individual sign-in type fields are populated correctly."""
+
+    def test_interactive_only(self):
+        from datetime import datetime, timezone, timedelta
+        recent = (datetime.now(timezone.utc) - timedelta(days=5)).isoformat()
+        sp = {
+            **BASE_SP,
+            "_signInActivity": {
+                "lastSignInActivity": {"lastSignInDateTime": recent},
+            },
+        }
+        result = analyze_app(sp)
+        assert result.last_interactive_sign_in == recent
+        assert result.last_non_interactive_sign_in is None
+        assert result.last_app_auth_client_sign_in is None
+        assert not result.is_daemon_app
+
+    def test_stale_detail_includes_breakdown(self):
+        from datetime import datetime, timezone, timedelta
+        old = (datetime.now(timezone.utc) - timedelta(days=200)).isoformat()
+        sp = {
+            **BASE_SP,
+            "_signInActivity": {
+                "lastSignInActivity": {"lastSignInDateTime": old},
+            },
+        }
+        result = analyze_app(sp)
+        stale_sig = next((s for s in result.signals if s.key == "stale"), None)
+        assert stale_sig is not None
+        assert "Activity breakdown:" in stale_sig.detail
+        assert "Interactive:" in stale_sig.detail
+        assert "Non-interactive: none" in stale_sig.detail
+
+    def test_never_signed_in_detail_includes_breakdown(self):
+        sp = {
+            **BASE_SP,
+            "_signInActivity": {"lastSignInActivity": {}},
+        }
+        result = analyze_app(sp)
+        sig = next((s for s in result.signals if s.key == "never_signed_in"), None)
+        assert sig is not None
+        assert "Activity breakdown:" in sig.detail
+        assert "Interactive: none" in sig.detail
+        assert "App-only (client): none" in sig.detail

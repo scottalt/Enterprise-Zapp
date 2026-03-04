@@ -138,6 +138,16 @@ class AppResult:
     # Daemon/service app flag (only application-authentication activity, no delegated)
     is_daemon_app: bool = False
 
+    # Sign-in activity breakdown — practitioner needs to see exactly which
+    # activity types are present/absent to make informed decisions.
+    last_interactive_sign_in: str | None = None
+    last_non_interactive_sign_in: str | None = None
+    last_delegated_client_sign_in: str | None = None
+    last_delegated_resource_sign_in: str | None = None
+    last_app_auth_client_sign_in: str | None = None
+    last_app_auth_resource_sign_in: str | None = None
+    sign_in_data_available: bool = True  # False when Graph returned no record for this app
+
     # Credential sprawl
     credential_count: int = 0
 
@@ -220,6 +230,7 @@ def _primary_recommendation(signals: list[Signal]) -> str:
 
 def _recommendation_for_signal(key: str) -> str:
     recs = {
+        "no_sign_in_data": "Verify this app's usage manually — sign-in data is unavailable. Check Azure AD sign-in logs or contact the app owner to confirm whether it is actively used.",
         "never_signed_in": "Review whether this app was ever needed. If recently created, allow time for setup. Otherwise, disable then delete.",
         "stale": "Verify with the app owner whether this is still in use. For apps inactive 6+ months, escalate for decommission. For 1+ year, disable and delete.",
         "no_owners": "Assign at least two owners to this app to ensure accountability.",
@@ -248,6 +259,7 @@ def _recommendation_for_signal(key: str) -> str:
 
 def _doc_url_for_signal(key: str) -> str:
     urls = {
+        "no_sign_in_data":                "https://learn.microsoft.com/en-us/entra/identity/monitoring-health/concept-sign-in-activity-report-service-principal",
         "never_signed_in":                "https://learn.microsoft.com/en-us/entra/identity/monitoring-health/recommendation-remove-unused-apps",
         "stale":                          "https://learn.microsoft.com/en-us/entra/identity/monitoring-health/recommendation-remove-unused-apps",
         "no_owners":                      "https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/overview-assign-app-owners",
@@ -321,19 +333,22 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
     # activity buckets.  We must check ALL of them and use the most recent
     # date to avoid false-positive staleness flags on apps that are actively
     # used via non-interactive or application-only (client_credentials) flows.
+
+    # Extract each activity type individually for the breakdown
+    _interactive_raw = sign_in.get("lastSignInActivity", {}).get("lastSignInDateTime")
+    _non_interactive_raw = sign_in.get("lastSignInActivity", {}).get("lastNonInteractiveSignInDateTime")
+    _delegated_client_raw = sign_in.get("delegatedClientSignInActivity", {}).get("lastSignInDateTime")
+    _delegated_resource_raw = sign_in.get("delegatedResourceSignInActivity", {}).get("lastSignInDateTime")
+    _app_auth_client_raw = sign_in.get("applicationAuthenticationClientSignInActivity", {}).get("lastSignInDateTime")
+    _app_auth_resource_raw = sign_in.get("applicationAuthenticationResourceSignInActivity", {}).get("lastSignInDateTime")
+
     _sign_in_candidates: list[str | None] = [
-        # Interactive sign-in
-        sign_in.get("lastSignInActivity", {}).get("lastSignInDateTime"),
-        # Non-interactive sign-in (token refreshes, background calls)
-        sign_in.get("lastSignInActivity", {}).get("lastNonInteractiveSignInDateTime"),
-        # Delegated flows (user-present, SP acting as client)
-        sign_in.get("delegatedClientSignInActivity", {}).get("lastSignInDateTime"),
-        # Delegated flows (SP acting as resource)
-        sign_in.get("delegatedResourceSignInActivity", {}).get("lastSignInDateTime"),
-        # App-only / client_credentials (SP as client)
-        sign_in.get("applicationAuthenticationClientSignInActivity", {}).get("lastSignInDateTime"),
-        # App-only / client_credentials (SP as resource)
-        sign_in.get("applicationAuthenticationResourceSignInActivity", {}).get("lastSignInDateTime"),
+        _interactive_raw,
+        _non_interactive_raw,
+        _delegated_client_raw,
+        _delegated_resource_raw,
+        _app_auth_client_raw,
+        _app_auth_resource_raw,
     ]
     _parsed_candidates = [(raw, _parse_dt(raw)) for raw in _sign_in_candidates if raw]
     if _parsed_candidates:
@@ -344,19 +359,40 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
         last_sign_in_dt = None
     days_since = _days_since(last_sign_in_dt)
 
+    # Did Graph actually return a sign-in activity record for this app?
+    # An empty dict means no record was returned (vs. a record with empty activity).
+    sign_in_data_available = bool(sign_in)
+
     # Determine whether this app has ONLY application-authentication activity
     # (i.e. daemon/service app using client_credentials — no user-present flows).
-    _has_app_auth_activity = bool(
-        sign_in.get("applicationAuthenticationClientSignInActivity", {}).get("lastSignInDateTime")
-        or sign_in.get("applicationAuthenticationResourceSignInActivity", {}).get("lastSignInDateTime")
-    )
+    _has_app_auth_activity = bool(_app_auth_client_raw or _app_auth_resource_raw)
     _has_delegated_activity = bool(
-        sign_in.get("lastSignInActivity", {}).get("lastSignInDateTime")
-        or sign_in.get("lastSignInActivity", {}).get("lastNonInteractiveSignInDateTime")
-        or sign_in.get("delegatedClientSignInActivity", {}).get("lastSignInDateTime")
-        or sign_in.get("delegatedResourceSignInActivity", {}).get("lastSignInDateTime")
+        _interactive_raw or _non_interactive_raw
+        or _delegated_client_raw or _delegated_resource_raw
     )
     is_daemon_app = _has_app_auth_activity and not _has_delegated_activity
+
+    # Build human-readable sign-in breakdown for signal details
+    def _activity_breakdown() -> str:
+        """Build a summary of which sign-in types had activity."""
+        lines = []
+        types = [
+            ("Interactive", _interactive_raw),
+            ("Non-interactive", _non_interactive_raw),
+            ("Delegated (client)", _delegated_client_raw),
+            ("Delegated (resource)", _delegated_resource_raw),
+            ("App-only (client)", _app_auth_client_raw),
+            ("App-only (resource)", _app_auth_resource_raw),
+        ]
+        for label, raw in types:
+            if raw:
+                dt = _parse_dt(raw)
+                ds = _days_since(dt) if dt else None
+                lines.append(f"  {label}: {raw[:10]} ({ds}d ago)" if ds is not None else f"  {label}: {raw[:10]}")
+            else:
+                lines.append(f"  {label}: none")
+        return "\n".join(lines)
+    _breakdown = _activity_breakdown()
 
     # Microsoft first-party apps skip: staleness, ownership, no_assignments, and
     # multi_tenant signals. They are managed by Microsoft and these signals are
@@ -364,8 +400,24 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
     days_since_created = _days_since(created_dt)
 
     if not is_microsoft_first_party:
-        if last_sign_in_dt is None and sign_in:
-            # Sign-in data available but app has never signed in.
+        if not sign_in_data_available:
+            # Graph returned no sign-in record for this app — we cannot determine
+            # staleness.  Flag this explicitly so the practitioner knows to investigate.
+            signals.append(Signal(
+                key="no_sign_in_data",
+                severity="low",
+                title="No sign-in data available",
+                detail=(
+                    "The sign-in activity endpoint returned no record for this app. "
+                    "This may happen when the app uses SAML/WS-Fed only, was recently "
+                    "provisioned, or when Reports.Read.All was not granted. "
+                    "Staleness cannot be determined — manual review recommended."
+                ),
+                score_contribution=5,
+            ))
+            score += 5
+        elif last_sign_in_dt is None:
+            # Sign-in data record exists but app has never signed in across ANY flow type.
             # Grace period: apps created within NEVER_SIGNED_IN_GRACE_DAYS get
             # a lower severity — they may still be in setup.
             if days_since_created is not None and days_since_created <= NEVER_SIGNED_IN_GRACE_DAYS:
@@ -374,8 +426,9 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
                     severity="low",
                     title=f"Never signed in (created {days_since_created} days ago)",
                     detail=(
-                        "This app has never authenticated, but was created recently "
-                        f"({days_since_created} days ago). It may still be in setup."
+                        "This app has never authenticated across any sign-in type. "
+                        f"Created recently ({days_since_created} days ago) — may still be in setup.\n"
+                        f"Activity breakdown:\n{_breakdown}"
                     ),
                     score_contribution=5,
                 ))
@@ -386,8 +439,10 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
                     severity="high",
                     title="Never signed in",
                     detail=(
-                        "This app has sign-in activity tracking but has never authenticated."
+                        "This app has a sign-in activity record but has never authenticated "
+                        "via any flow (interactive, non-interactive, delegated, or app-only)."
                         + (f" Created {days_since_created} days ago." if days_since_created else "")
+                        + f"\nActivity breakdown:\n{_breakdown}"
                     ),
                     score_contribution=35,
                 ))
@@ -404,7 +459,8 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
                     title=f"Abandoned — no sign-in for {days_since} days",
                     detail=(
                         f"This app has had no sign-in activity for over a year "
-                        f"(last seen: {last_sign_in_raw}). Strong candidate for immediate disable/delete."
+                        f"(last seen: {last_sign_in_raw}). Strong candidate for immediate disable/delete.\n"
+                        f"Activity breakdown:\n{_breakdown}"
                     ),
                     score_contribution=40,
                 ))
@@ -416,7 +472,8 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
                     title=f"Stale — no sign-in for {days_since} days",
                     detail=(
                         f"This app has had no sign-in activity for over 6 months "
-                        f"(last seen: {last_sign_in_raw}). Escalate and plan for decommission."
+                        f"(last seen: {last_sign_in_raw}). Escalate and plan for decommission.\n"
+                        f"Activity breakdown:\n{_breakdown}"
                     ),
                     score_contribution=30,
                 ))
@@ -428,7 +485,8 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
                     title=f"Stale — last sign-in {days_since} days ago",
                     detail=(
                         f"No sign-in activity in the past {stale_days} days "
-                        f"(last seen: {last_sign_in_raw}). Verify with the app owner."
+                        f"(last seen: {last_sign_in_raw}). Verify with the app owner.\n"
+                        f"Activity breakdown:\n{_breakdown}"
                     ),
                     score_contribution=20,
                 ))
@@ -928,6 +986,13 @@ def analyze_app(sp: dict, stale_days: int = DEFAULT_STALE_DAYS) -> AppResult:
         is_multi_tenant=is_multi_tenant,
         has_mixed_credentials=has_mixed_credentials,
         is_daemon_app=is_daemon_app,
+        last_interactive_sign_in=_interactive_raw,
+        last_non_interactive_sign_in=_non_interactive_raw,
+        last_delegated_client_sign_in=_delegated_client_raw,
+        last_delegated_resource_sign_in=_delegated_resource_raw,
+        last_app_auth_client_sign_in=_app_auth_client_raw,
+        last_app_auth_resource_sign_in=_app_auth_resource_raw,
+        sign_in_data_available=sign_in_data_available,
         credential_count=total_cred_count,
         action_tags=action_tags,
         owners=owners,

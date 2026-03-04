@@ -404,7 +404,13 @@
     color: var(--muted);
     margin-top: 6px;
     line-height: 1.5;
+    white-space: pre-wrap;
   }
+  .signin-breakdown { margin-top: 10px; padding: 8px 12px; background: var(--surface); border-radius: 6px; border: 1px solid var(--border); }
+  .signin-breakdown .si-label { font-weight: 600; color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.03em; display: block; margin-bottom: 6px; }
+  .signin-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 4px 16px; font-size: 12px; }
+  .signin-grid .si-type { color: var(--muted); }
+  .signin-grid .si-none { color: var(--muted); font-style: italic; }
   .signal-block {
     margin-bottom: 12px;
     padding: 10px 12px 12px;
@@ -665,6 +671,30 @@
 {% endif %}
 {% endmacro %}
 
+{# ── Reusable macro: sign-in activity breakdown ───────────────────────────── #}
+{% macro signin_breakdown(app) %}
+<div class="signin-breakdown">
+  <span class="si-label">Sign-in Activity Breakdown</span>
+  {% if not app.sign_in_data_available %}
+  <div style="font-size:12px; color:var(--muted); font-style:italic;">No sign-in data returned by Graph API for this app.</div>
+  {% else %}
+  <div class="signin-grid">
+    {% set si_types = [
+      ("Interactive", app.last_interactive_sign_in),
+      ("Non-interactive", app.last_non_interactive_sign_in),
+      ("Delegated (client)", app.last_delegated_client_sign_in),
+      ("Delegated (resource)", app.last_delegated_resource_sign_in),
+      ("App-only (client)", app.last_app_auth_client_sign_in),
+      ("App-only (resource)", app.last_app_auth_resource_sign_in),
+    ] %}
+    {% for label, val in si_types %}
+    <div><span class="si-type">{{ label }}:</span> {% if val %}<span style="font-weight:600;">{{ val | format_date }}</span>{% else %}<span class="si-none">none</span>{% endif %}</div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endmacro %}
+
 <!-- ── Header ────────────────────────────────────────────────────────────── -->
 <div class="header">
   <div class="container">
@@ -903,6 +933,7 @@
                 {% if not app.signals %}
                 <p style="color: var(--muted); font-style: italic; font-size: 13px;">No signals — this app passed all hygiene checks.</p>
                 {% endif %}
+                {{ signin_breakdown(app) }}
               </div>
             </td>
           </tr>
@@ -998,6 +1029,7 @@
                   {% if sig.recommendation %}<p class="signal-rec-text">→ {{ sig.recommendation }}{% if sig.doc_url %}<a href="{{ sig.doc_url }}" target="_blank" rel="noopener" class="doc-link">Learn more ↗</a>{% endif %}</p>{% endif %}
                 </div>
                 {% endfor %}
+                {{ signin_breakdown(app) }}
               </div>
             </td>
           </tr>
@@ -1083,6 +1115,7 @@
                   {% if sig.recommendation %}<p class="signal-rec-text">→ {{ sig.recommendation }}{% if sig.doc_url %}<a href="{{ sig.doc_url }}" target="_blank" rel="noopener" class="doc-link">Learn more ↗</a>{% endif %}</p>{% endif %}
                 </div>
                 {% endfor %}
+                {{ signin_breakdown(app) }}
               </div>
             </td>
           </tr>
@@ -1180,6 +1213,7 @@
                   {% if sig.recommendation %}<p class="signal-rec-text">→ {{ sig.recommendation }}{% if sig.doc_url %}<a href="{{ sig.doc_url }}" target="_blank" rel="noopener" class="doc-link">Learn more ↗</a>{% endif %}</p>{% endif %}
                 </div>
                 {% endfor %}
+                {{ signin_breakdown(app) }}
               </div>
             </td>
           </tr>
@@ -1263,6 +1297,7 @@
                   {% if sig.recommendation %}<p class="signal-rec-text">→ {{ sig.recommendation }}{% if sig.doc_url %}<a href="{{ sig.doc_url }}" target="_blank" rel="noopener" class="doc-link">Learn more ↗</a>{% endif %}</p>{% endif %}
                 </div>
                 {% endfor %}
+                {{ signin_breakdown(app) }}
               </div>
             </td>
           </tr>
@@ -1344,6 +1379,7 @@
                   {% if sig.recommendation %}<p class="signal-rec-text">→ {{ sig.recommendation }}{% if sig.doc_url %}<a href="{{ sig.doc_url }}" target="_blank" rel="noopener" class="doc-link">Learn more ↗</a>{% endif %}</p>{% endif %}
                 </div>
                 {% endfor %}
+                {{ signin_breakdown(app) }}
               </div>
             </td>
           </tr>
